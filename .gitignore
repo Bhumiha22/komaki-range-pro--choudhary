@@ -3,3 +3,5 @@ build/
 local.properties
 *.iml
 .idea/
+app/src/main/assets/maplibre-gl.js
+app/src/main/assets/maplibre-gl.css

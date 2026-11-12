@@ -23,6 +23,12 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Bundle MapLibre GL (vector map library) into the app
+        run: |
+          cd "$RUNNER_TEMP" && npm pack maplibre-gl@4.7.1 --silent && tar xzf maplibre-gl-4.7.1.tgz
+          cp package/dist/maplibre-gl.js package/dist/maplibre-gl.css "$GITHUB_WORKSPACE/app/src/main/assets/"
+          ls -l "$GITHUB_WORKSPACE/app/src/main/assets/"
+
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 

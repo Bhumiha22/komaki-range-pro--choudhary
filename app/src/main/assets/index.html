@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <script src="ble-polyfill.js"></script>
+<link rel="stylesheet" href="maplibre-gl.css">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
@@ -169,6 +170,13 @@ main{padding-bottom:calc(88px + var(--sab,0px))}
 button.ride{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:#ffffff06;border:1px solid #ffffff0d;border-radius:16px;color:var(--tx);padding:12px 14px;margin-bottom:8px;font:inherit}
 button.ride small{display:block;color:var(--mut);font-size:12px;margin-top:1px}
 button.ride .rr{font-size:12px;color:var(--mut);text-align:right}
+#mlmap{position:absolute;inset:0;display:none;z-index:1;background:#0a0c0f}
+.mapcard.gl #mlmap{display:block}.mapcard.gl #gmap{visibility:hidden}
+.mapcard .mspd,.mmsg,.mctl{z-index:3}.mctl{bottom:40px}
+.posdot{width:18px;height:18px;border-radius:50%;background:var(--ac);border:3px solid #fff;box-shadow:0 0 0 8px color-mix(in srgb,var(--ac) 30%,transparent);animation:pd 1.8s ease-in-out infinite}
+@keyframes pd{50%{box-shadow:0 0 0 14px color-mix(in srgb,var(--ac) 8%,transparent)}}
+@media(prefers-reduced-motion:reduce){.posdot{animation:none}}
+.maplibregl-ctrl-attrib{background:#0a0c0fb3!important;color:#9aa4ae!important;font-size:10px}.maplibregl-ctrl-attrib a{color:#9aa4ae!important}
 </style>
 </head>
 <body>
@@ -278,6 +286,7 @@ button.ride .rr{font-size:12px;color:var(--mut);text-align:right}
 <section id="s-gps">
   <div class="card mapcard" id="mapcard">
     <canvas id="gmap" width="600" height="440"></canvas>
+    <div id="mlmap"></div>
     <div class="mspd"><b id="m-spd">0</b><small>km/h</small></div>
     <div class="mmsg" id="m-msg">Waiting for GPS…</div>
     <div class="mctl">
@@ -665,6 +674,7 @@ $("#bConn").onclick=bleConnect;$("#hConn").onclick=bleConnect;
 $("#bDis").onclick=bleDisconnect;$("#bSend").onclick=bleSend;
 setMode();
 </script>
+<script src="maplibre-gl.js"></script>
 <script src="ridemap.js"></script>
 </body>
 </html>

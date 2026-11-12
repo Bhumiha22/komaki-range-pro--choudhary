@@ -11,6 +11,13 @@
   const last0 = LS.get("lastPos", null);
   const M = { z: last0 ? 16 : 4, lat: last0 ? last0[0] : 20.59, lon: last0 ? last0[1] : 78.96, follow: true, pos: last0, view: null };
   const T = { watch: null, pts: [], km: 0, vmax: 0, sp: 0, lastT: 0 };
+  M.hd = 0;
+  // Vector map (MapLibre GL, OpenStreetMap data, CARTO Dark Matter style). Falls back to the flat canvas map below
+  // if the library file is missing or the style cannot load (for example no internet).
+  const STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+  let GL = null, glReady = false, glTried = false, posEl = null, posMk = null;
+  const accent = () => getComputedStyle(document.body).getPropertyValue("--ac").trim() || "#3aa0ff";
+  const visible = () => el("s-gps").classList.contains("a");
 
   /* ---------- projection ---------- */
   const W = z => 256 * Math.pow(2, z);
@@ -27,11 +34,12 @@
   /* ---------- tiles ---------- */
   const cache = new Map();
   let queued = false;
-  const sched = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; draw(); }); };
+  const csched = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; draw(); }); };
+  const sched = () => { if (GL) glSync(); else csched(); };
   function tile(z, x, y) {
     const k = z + "/" + x + "/" + y; let i = cache.get(k);
     if (!i) {
-      i = new Image(); i.onload = sched;
+      i = new Image(); i.onload = csched;
       i.src = TILE.replace("{s}", "abcd"[(x + y) % 4]).replace("{z}", z).replace("{x}", x).replace("{y}", y);
       cache.set(k, i); if (cache.size > 260) cache.delete(cache.keys().next().value);
     }
@@ -53,7 +61,7 @@
         if (i.complete && i.naturalWidth) ctx.drawImage(i, tx * 256 - ox, ty * 256 - oy, 256, 256);
       }
     }
-    const ac = getComputedStyle(document.body).getPropertyValue("--ac").trim() || "#3aa0ff";
+    const ac = accent();
     const pts = M.view || (R.on ? T.pts : []);
     if (pts.length > 1) {
       ctx.lineJoin = ctx.lineCap = "round";
@@ -77,9 +85,67 @@
     ctx.fillText("© OpenStreetMap contributors © CARTO", 10, h - 8);
   }
 
+
+  /* ---------- vector map (MapLibre) ---------- */
+  function initGL() {
+    glTried = true;
+    if (typeof maplibregl === "undefined") return;
+    try {
+      GL = new maplibregl.Map({ container: "mlmap", style: STYLE, center: [M.lon, M.lat], zoom: M.z, attributionControl: false, fadeDuration: 0, maxPitch: 70 });
+      GL.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+    } catch (e) { GL = null; return; }
+    el("mapcard").classList.add("gl");
+    GL.on("load", () => { glReady = true; glLayers(); glSync(); });
+    GL.on("error", () => { if (!glReady) glFallback(); });
+    GL.on("dragstart", () => { M.follow = false; });
+    GL.on("zoom", () => { M.z = GL.getZoom(); });
+    setTimeout(() => { if (!glReady) glFallback(); }, 12000);
+  }
+  function glFallback() {
+    if (!GL) return;
+    try { GL.remove(); } catch (e) {}
+    GL = null; glReady = false; el("mapcard").classList.remove("gl"); csched();
+  }
+  const emptyFC = () => ({ type: "FeatureCollection", features: [] });
+  function glLayers() {
+    const c = accent(), line = { "line-cap": "round", "line-join": "round" };
+    GL.addSource("route", { type: "geojson", data: emptyFC() });
+    GL.addLayer({ id: "route-glow", type: "line", source: "route", layout: line, paint: { "line-color": c, "line-width": 12, "line-blur": 9, "line-opacity": 0.75 } });
+    GL.addLayer({ id: "route-main", type: "line", source: "route", layout: line, paint: { "line-color": c, "line-width": 4.5 } });
+    GL.addLayer({ id: "route-core", type: "line", source: "route", layout: line, paint: { "line-color": "#ffffff", "line-width": 1.4, "line-opacity": 0.85 } });
+    GL.addSource("ends", { type: "geojson", data: emptyFC() });
+    GL.addLayer({ id: "ends", type: "circle", source: "ends", paint: { "circle-radius": 6.5, "circle-color": ["get", "c"], "circle-stroke-width": 2, "circle-stroke-color": "#000000" } });
+    posEl = document.createElement("div"); posEl.className = "posdot";
+    posMk = new maplibregl.Marker({ element: posEl });
+  }
+  function glSync() {
+    if (!GL || !glReady || !visible()) return;
+    const c = accent(), pts = M.view || (R.on ? T.pts : []), ll = pts.map(q => [q[1], q[0]]);
+    ["route-glow", "route-main"].forEach(id => GL.setPaintProperty(id, "line-color", c));
+    GL.getSource("route").setData(ll.length > 1 ? { type: "Feature", geometry: { type: "LineString", coordinates: ll } } : emptyFC());
+    GL.getSource("ends").setData(M.view && ll.length > 1 ? { type: "FeatureCollection", features: [
+      { type: "Feature", properties: { c: "#2fe06b" }, geometry: { type: "Point", coordinates: ll[0] } },
+      { type: "Feature", properties: { c: "#ff5a5a" }, geometry: { type: "Point", coordinates: ll[ll.length - 1] } }] } : emptyFC());
+    if (M.pos && !M.view) { posMk.setLngLat([M.pos[1], M.pos[0]]); if (!posEl.isConnected) posMk.addTo(GL); }
+    else if (posEl && posEl.isConnected) posMk.remove();
+    if (M.follow && !M.view && M.pos) {
+      const o = { center: [M.pos[1], M.pos[0]], duration: 900, essential: true };
+      if (R.on) { o.zoom = Math.max(GL.getZoom(), 16.5); o.pitch = 50; o.bearing = M.hd; }
+      GL.easeTo(o);
+    }
+  }
+
   /* ---------- view control ---------- */
-  function center(lat, lon) { M.lat = lat; M.lon = lon; sched(); }
+  function center(lat, lon) {
+    M.lat = lat; M.lon = lon;
+    if (GL) { if (glReady) GL.easeTo({ center: [lon, lat], duration: 400 }); } else csched();
+  }
   function fit(pts) {
+    if (GL) {
+      if (!glReady || pts.length < 2) return;
+      const b = new maplibregl.LngLatBounds(); pts.forEach(q => b.extend([q[1], q[0]]));
+      GL.fitBounds(b, { padding: { top: 90, bottom: 60, left: 50, right: 70 }, pitch: 0, bearing: 0, duration: 700, maxZoom: 17 }); return;
+    }
     const w = cv.clientWidth - 70, h = cv.clientHeight - 90; if (!w || pts.length < 2) return;
     let a = 90, b = -90, c = 180, d = -180;
     pts.forEach(p => { a = Math.min(a, p[0]); b = Math.max(b, p[0]); c = Math.min(c, p[1]); d = Math.max(d, p[1]); });
@@ -87,8 +153,13 @@
     while (z > 3 && (Math.abs(px(d, z) - px(c, z)) > w || Math.abs(py(a, z) - py(b, z)) > h)) z--;
     M.z = z; center((a + b) / 2, (c + d) / 2);
   }
-  function live() { M.view = null; M.follow = true; if (M.pos) { M.z = Math.max(M.z, 16); center(M.pos[0], M.pos[1]); } else sched(); setMsg(); renderList(); }
-  const zoom = d => { M.z = Math.max(3, Math.min(19, M.z + d)); sched(); };
+  function live() {
+    M.view = null; M.follow = true;
+    if (GL && glReady && M.pos) GL.easeTo({ center: [M.pos[1], M.pos[0]], zoom: Math.max(GL.getZoom(), 16), pitch: R.on ? 50 : 0, bearing: R.on ? M.hd : 0, duration: 700 });
+    else if (M.pos) { M.z = Math.max(M.z, 16); center(M.pos[0], M.pos[1]); } else sched();
+    sched(); setMsg(); renderList();
+  }
+  const zoom = d => { if (GL) { if (glReady) d > 0 ? GL.zoomIn() : GL.zoomOut(); return; } M.z = Math.max(3, Math.min(19, M.z + d)); csched(); };
   el("m-in").onclick = () => zoom(1); el("m-out").onclick = () => zoom(-1); el("m-loc").onclick = live;
 
   // drag to pan, two fingers to zoom
@@ -138,7 +209,10 @@
       if (v != null && v < 140 && v > T.vmax) T.vmax = v;
     }
     T.sp = v != null && v >= 1 ? v : 0;
-    if (M.follow && !M.view) center(ll[0], ll[1]); else sched();
+    if (c.heading != null && !isNaN(c.heading) && (c.speed || 0) > 1.5) { // smooth heading, shortest turn
+      const dlt = ((c.heading - M.hd + 540) % 360) - 180; M.hd = (M.hd + dlt * 0.35 + 360) % 360;
+    }
+    if (GL) sched(); else if (M.follow && !M.view) center(ll[0], ll[1]); else csched();
     setMsg(R.on ? "Recording route · GPS ±" + Math.round(c.accuracy) + " m" : null);
   }
   function onErr(e) {
@@ -170,6 +244,7 @@
       LS.set("rides", S.rides);
     }
     T.sp = 0; setMsg(); stats(); renderList(); sched();
+    if (GL && glReady) GL.easeTo({ pitch: 0, bearing: 0, duration: 700 });
   };
   function thin(a, max = 700) {
     const r = q => [+q[0].toFixed(5), +q[1].toFixed(5)];
@@ -195,10 +270,13 @@
   let shown = false;
   setInterval(() => {
     const vis = el("s-gps").classList.contains("a");
-    if (vis && !shown) { shown = true; draw(); setMsg(); renderList(); if (T.watch == null) oneShot(); }
+    if (vis && !shown) {
+      shown = true; if (!glTried) initGL(); if (GL && glReady) GL.resize();
+      draw(); setMsg(); renderList(); if (GL) sched(); if (T.watch == null) oneShot();
+    }
     if (!vis) shown = false;
     if (vis) stats();
   }, 1000);
-  addEventListener("resize", sched);
+  addEventListener("resize", () => { if (GL && glReady) GL.resize(); sched(); });
   setMsg(); stats(); renderList();
 })();
