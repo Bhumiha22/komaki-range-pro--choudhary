@@ -158,6 +158,17 @@ body{padding:var(--sat,0px) var(--sar,0px) 0 var(--sal,0px)}
 header{padding-top:12px}
 nav{padding-bottom:var(--sab,0px)}
 main{padding-bottom:calc(88px + var(--sab,0px))}
+/* ===== ride map ===== */
+#gmap{touch-action:none;cursor:grab}
+.mapcard .mspd{z-index:2;pointer-events:none;text-shadow:0 2px 12px #000}
+.mmsg{position:absolute;right:12px;top:12px;max-width:62%;font-size:11.5px;color:#cfd6dd;background:#0a0c0fcc;border:1px solid var(--hair);padding:5px 10px;border-radius:999px;text-align:right}
+.mctl{position:absolute;right:12px;bottom:26px;display:flex;flex-direction:column;gap:8px}
+.mctl button{width:42px;height:42px;border-radius:14px;border:1px solid var(--hair);background:#0a0c0fe6;color:var(--tx);display:grid;place-items:center;padding:0}
+.mctl svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.mctl #m-loc{color:var(--ac)}
+button.ride{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;background:#ffffff06;border:1px solid #ffffff0d;border-radius:16px;color:var(--tx);padding:12px 14px;margin-bottom:8px;font:inherit}
+button.ride small{display:block;color:var(--mut);font-size:12px;margin-top:1px}
+button.ride .rr{font-size:12px;color:var(--mut);text-align:right}
 </style>
 </head>
 <body>
@@ -265,9 +276,21 @@ main{padding-bottom:calc(88px + var(--sab,0px))}
 
 
 <section id="s-gps">
+  <div class="card mapcard" id="mapcard">
+    <canvas id="gmap" width="600" height="440"></canvas>
+    <div class="mspd"><b id="m-spd">0</b><small>km/h</small></div>
+    <div class="mmsg" id="m-msg">Waiting for GPS…</div>
+    <div class="mctl">
+      <button id="m-in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button id="m-out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+      <button id="m-loc" aria-label="Back to my location"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    </div>
+  </div>
+  <div class="card trio" id="m-grid"></div>
   <div class="card"><div class="note">Rides start by themselves when the scooter uses power and stop after 3 minutes with no use, or when charging starts.</div>
     <div class="row" style="display:none"><select id="mode"><option>Eco</option><option>Normal</option><option>Sport</option></select><button id="bRs">Start</button><button id="bRe" disabled>Stop</button></div></div>
   <div class="grid" id="g-grid"></div>
+  <div class="card"><b>Saved rides</b><div id="m-list" style="margin-top:8px"></div></div>
 </section>
 </main>
 
@@ -642,5 +665,6 @@ $("#bConn").onclick=bleConnect;$("#hConn").onclick=bleConnect;
 $("#bDis").onclick=bleDisconnect;$("#bSend").onclick=bleSend;
 setMode();
 </script>
+<script src="ridemap.js"></script>
 </body>
 </html>

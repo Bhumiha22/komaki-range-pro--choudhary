@@ -10,6 +10,11 @@ notify, read, write by UUID). The web page itself is unchanged apart from one ad
 - `navigator.wakeLock` (keeps the screen on while connected)
 - exporting `komaki-packets.json` (saved to the phone's Downloads folder)
 
+## Map and GPS rides
+The Ride tab has an in-app map (OpenStreetMap data, CARTO dark style, so no Google Maps app or API key is needed).
+When the scooter starts using power, a ride starts, GPS records the route, distance and speed, and the ride is saved
+with its route. Tap a saved ride to see it on the map. Needs internet for map tiles; the route line still records offline.
+
 ## Get the APK (no PC needed)
 1. Push to `main` (or run **Actions -> Build APK -> Run workflow**).
 2. When it finishes, open **Releases -> latest** on your phone and download `KomakiX1RangePro.apk`.

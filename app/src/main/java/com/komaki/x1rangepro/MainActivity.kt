@@ -39,6 +39,22 @@ class MainActivity : AppCompatActivity() {
             "s.setProperty('--sar','${r}px');s.setProperty('--sab','${b}px')})()", null)
     }
 
+    private var locCallback: ((Boolean) -> Unit)? = null
+    private val locLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+            val cb = locCallback; locCallback = null
+            cb?.invoke(res.values.any { it })
+        }
+
+    /** Location for the in-app map and ride route. Main thread only. */
+    fun requestLocationPermission(cb: (Boolean) -> Unit) {
+        val ok = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            .any { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
+        if (ok) { cb(true); return }
+        locCallback = cb
+        locLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
+
     private var permCallback: ((Boolean) -> Unit)? = null
 
     private val permLauncher =
@@ -118,6 +134,10 @@ class MainActivity : AppCompatActivity() {
         }
         // The page uses alert() and confirm()
         web.webChromeClient = object : WebChromeClient() {
+            override fun onGeolocationPermissionsShowPrompt(origin: String, callback: android.webkit.GeolocationPermissions.Callback) {
+                requestLocationPermission { ok -> callback.invoke(origin, ok, false) }
+            }
+
             override fun onJsAlert(view: WebView, url: String?, message: String?, result: JsResult): Boolean {
                 AlertDialog.Builder(this@MainActivity).setMessage(message)
                     .setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }
