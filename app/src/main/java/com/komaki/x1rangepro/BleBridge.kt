@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
+import android.location.LocationManager
 import android.content.ContentValues
 import android.content.Context
 import android.os.Build
@@ -203,6 +205,7 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
             lv.adapter = listAdapter
             val d = AlertDialog.Builder(act)
                 .setTitle("Select your scooter")
+                .setMessage("Scanning… Keep the scooter on and close PackDial. If nothing appears, turn Location ON.")
                 .setView(lv)
                 .setNegativeButton(android.R.string.cancel) { _, _ -> result.complete(null) }
                 .setOnCancelListener { result.complete(null) }
@@ -210,7 +213,9 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
             lv.setOnItemClickListener { _, _, pos, _ -> result.complete(order.getOrNull(pos)); d.dismiss() }
             dialog = d
             d.show()
-            scanner.startScan(cb)
+            scanner.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), cb)
+            val lm = act.getSystemService(LocationManager::class.java)
+            if (lm != null && !lm.isLocationEnabled) toast("Location is OFF. Turn it on, or the scan may find nothing.")
         }
         try {
             return result.await() ?: throw Err("NotFoundError", "No device selected")

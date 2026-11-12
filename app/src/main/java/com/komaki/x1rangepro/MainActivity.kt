@@ -32,21 +32,26 @@ class MainActivity : AppCompatActivity() {
     private val permLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
             val cb = permCallback; permCallback = null
-            cb?.invoke(res.values.all { it })
+            cb?.invoke(hasBlePermissions())
         }
 
-    fun hasBlePermissions(): Boolean = blePerms().all {
+    /** Bluetooth permissions are required; location is requested too (some phones need it for scanning) but optional. */
+    fun hasBlePermissions(): Boolean = requiredPerms().all {
         ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun blePerms(): Array<String> =
+    private fun requiredPerms(): Array<String> =
         if (Build.VERSION.SDK_INT >= 31)
             arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
         else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
 
+    private fun blePerms(): Array<String> =
+        (requiredPerms() + Manifest.permission.ACCESS_FINE_LOCATION).distinct().toTypedArray()
+
     /** Must be called on the main thread. */
     fun requestBlePermissions(cb: (Boolean) -> Unit) {
-        if (hasBlePermissions()) { cb(true); return }
+        val all = blePerms().all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
+        if (all) { cb(true); return }
         permCallback = cb
         permLauncher.launch(blePerms())
     }
