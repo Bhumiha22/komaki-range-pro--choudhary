@@ -18,7 +18,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -142,7 +141,7 @@ class ScanSheet(
         val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         lp.bottomMargin = dp(8)
         line.layoutParams = lp
-        return FrameLayout(act).apply { addView(line); layoutParams = lp }
+        return line
     }
 
     /** Four-bar signal strength glyph. */
