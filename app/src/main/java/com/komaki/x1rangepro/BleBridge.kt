@@ -15,10 +15,7 @@ import android.util.Base64
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import android.widget.ArrayAdapter
-import android.widget.ListView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -38,7 +35,6 @@ import kotlin.coroutines.resume
 class BleBridge(private val act: MainActivity, private val web: WebView) {
 
     private class Err(val kind: String, msg: String) : Exception(msg)
-    private data class Found(val addr: String, var name: String?, var rssi: Int)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val adapter: BluetoothAdapter? = act.getSystemService(BluetoothManager::class.java)?.adapter
@@ -172,26 +168,24 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
         if (adapter == null || !adapter.isEnabled) throw Err("NetworkError", "Bluetooth is off. Turn it on and try again.")
     }
 
-    /** Shows a native device chooser fed by a live BLE scan. */
+    /** Shows a bottom sheet fed by a live BLE scan; returns the device the user taps. */
     private suspend fun pick(): Found {
         val scanner = adapter?.bluetoothLeScanner ?: throw Err("NetworkError", "BLE scanner unavailable")
         val result = CompletableDeferred<Found?>()
         val found = LinkedHashMap<String, Found>()
-        var order: List<Found> = emptyList()
-        val labels = ArrayList<String>()
-        var dialog: AlertDialog? = null
-        var ui: ArrayAdapter<String>? = null
+        var sheet: ScanSheet? = null
+        val svc = UUID.fromString("0000ff00-0000-1000-8000-00805f9b34fb")
         val cb = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, r: ScanResult) {
                 val addr = r.device.address
                 val name = r.scanRecord?.deviceName ?: r.device.name
+                val likely = r.scanRecord?.serviceUuids?.any { it.uuid == svc } == true ||
+                    (name ?: "").let { n -> listOf("komaki", "jbd", "bms", "xiaoxiang").any { n.contains(it, true) } }
                 val f = found.getOrPut(addr) { Found(addr, name, r.rssi) }
                 f.rssi = r.rssi
                 if (name != null) f.name = name
-                order = found.values.sortedWith(compareByDescending<Found> { it.name != null }.thenByDescending { it.rssi })
-                labels.clear()
-                labels.addAll(order.map { "${it.name ?: "Unknown device"}\n${it.addr}   ${it.rssi} dBm" })
-                ui?.notifyDataSetChanged()
+                if (likely) f.likely = true
+                sheet?.submit(found.values)
             }
 
             override fun onScanFailed(errorCode: Int) {
@@ -199,20 +193,7 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
             }
         }
         act.runOnUiThread {
-            val lv = ListView(act)
-            val listAdapter = ArrayAdapter(act, android.R.layout.simple_list_item_1, labels)
-            ui = listAdapter
-            lv.adapter = listAdapter
-            val d = AlertDialog.Builder(act)
-                .setTitle("Select your scooter")
-                .setMessage("Scanning… Keep the scooter on and close PackDial. If nothing appears, turn Location ON.")
-                .setView(lv)
-                .setNegativeButton(android.R.string.cancel) { _, _ -> result.complete(null) }
-                .setOnCancelListener { result.complete(null) }
-                .create()
-            lv.setOnItemClickListener { _, _, pos, _ -> result.complete(order.getOrNull(pos)); d.dismiss() }
-            dialog = d
-            d.show()
+            sheet = ScanSheet(act, { result.complete(it) }, { result.complete(null) }).also { it.show() }
             scanner.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), cb)
             val lm = act.getSystemService(LocationManager::class.java)
             if (lm != null && !lm.isLocationEnabled) toast("Location is OFF. Turn it on, or the scan may find nothing.")
@@ -220,7 +201,7 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
         try {
             return result.await() ?: throw Err("NotFoundError", "No device selected")
         } finally {
-            act.runOnUiThread { runCatching { scanner.stopScan(cb) }; dialog?.dismiss() }
+            act.runOnUiThread { runCatching { scanner.stopScan(cb) }; sheet?.dismiss() }
         }
     }
 

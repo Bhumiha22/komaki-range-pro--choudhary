@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.widget.FrameLayout
 import android.webkit.JsResult
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -22,11 +23,22 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
+import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
     private lateinit var ble: BleBridge
+    private var insets = intArrayOf(0, 0, 0, 0) // left, top, right, bottom in CSS px
+
+    /** Gives the page the real safe-area sizes (notch, status bar, gesture bar) as CSS variables. */
+    private fun pushInsets() {
+        val (l, t, r, b) = insets
+        web.evaluateJavascript("(function(){var s=document.documentElement.style;" +
+            "s.setProperty('--sal','${l}px');s.setProperty('--sat','${t}px');" +
+            "s.setProperty('--sar','${r}px');s.setProperty('--sab','${b}px')})()", null)
+    }
+
     private var permCallback: ((Boolean) -> Unit)? = null
 
     private val permLauncher =
@@ -60,12 +72,22 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         web = WebView(this).apply { setBackgroundColor(Color.BLACK) }
-        setContentView(web)
-        ViewCompat.setOnApplyWindowInsetsListener(web) { v, insets ->
-            val b = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            v.setPadding(b.left, b.top, b.right, b.bottom)
-            insets
+        val root = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            addView(web, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         }
+        setContentView(root)
+        // Fallback until real insets arrive: status bar height (covers the camera cut-out on most phones)
+        val sbId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        if (sbId > 0) insets[1] = (resources.getDimensionPixelSize(sbId) / resources.displayMetrics.density).roundToInt()
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, wi ->
+            val b = wi.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val d = resources.displayMetrics.density
+            insets = intArrayOf((b.left / d).roundToInt(), (b.top / d).roundToInt(), (b.right / d).roundToInt(), (b.bottom / d).roundToInt())
+            pushInsets()
+            WindowInsetsCompat.CONSUMED
+        }
+        ViewCompat.requestApplyInsets(root)
 
         val loader = WebViewAssetLoader.Builder()
             .setDomain(HOST)
@@ -82,6 +104,9 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = true
         }
         web.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) = pushInsets()
+            override fun onPageFinished(view: WebView, url: String?) = pushInsets()
+
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 loader.shouldInterceptRequest(request.url)
 

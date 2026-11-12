@@ -153,6 +153,11 @@ nav svg,.cat .ic svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke
 nav button.a::before{content:"";position:absolute;top:-5px;left:30%;right:30%;height:2px;border-radius:2px;background:var(--ac);box-shadow:0 0 10px var(--ac)}
 .cat>summary .ic{color:var(--ac);display:grid;place-items:center}.cat .ic svg{width:22px;height:22px}
 #d-cnote:empty{display:none}.hero2 .gauge{margin-bottom:0}
+/* ===== safe areas (values come from the app) ===== */
+body{padding:var(--sat,0px) var(--sar,0px) 0 var(--sal,0px)}
+header{padding-top:12px}
+nav{padding-bottom:var(--sab,0px)}
+main{padding-bottom:calc(88px + var(--sab,0px))}
 </style>
 </head>
 <body>
