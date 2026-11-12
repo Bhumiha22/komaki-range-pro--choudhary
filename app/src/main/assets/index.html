@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="ble-polyfill.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Komaki X1 Range Pro</title>
+<style>
+:root{--bg:#000;--card:#16181b;--line:#2a2e33;--tx:#e8edf2;--mut:#8a94a0;--cy:#18e0ff;--gn:#2fe06b;--rd:#ff5a5a;--am:#ffb02e;box-sizing:border-box}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 "Segoe UI",Roboto,system-ui,sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{font-size:18px;margin:0;letter-spacing:.3px}h1 b{color:var(--cy)}
+.st{font-size:12px;color:var(--mut)}.st.on{color:var(--gn)}.st.bad{color:var(--rd)}
+nav{display:flex;overflow-x:auto;border-bottom:1px solid var(--line)}
+nav button{flex:1;min-width:84px;background:none;border:0;color:var(--mut);padding:11px 8px;font:inherit;border-bottom:2px solid transparent}
+nav button.a{color:var(--cy);border-color:var(--cy)}
+main{padding:12px 12px 96px;max-width:900px;margin:auto}
+section{display:none}section.a{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.grid .card{margin:0}
+.k{font-size:12px;color:var(--mut)}.v{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}.v small{font-size:13px;color:var(--mut);font-weight:400}
+.na{color:var(--mut)}
+button.b,select,input,textarea{font:inherit;color:var(--tx);background:#0d0f11;border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+button.b{background:#0e2a31;border-color:var(--cy);color:var(--cy)}button.b.g{background:#0f2a18;border-color:var(--gn);color:var(--gn)}button.b.r{background:#2a1010;border-color:var(--rd);color:var(--rd)}
+button:disabled{opacity:.4}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+input{width:90px}textarea{width:100%;min-height:60px}
+pre,.log{font:12px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;background:#0a0b0c;border:1px solid var(--line);border-radius:8px;padding:8px;max-height:260px;overflow:auto;margin:0}
+.rx{color:var(--cy)}.tx{color:var(--am)}.hl{background:#3a2d00;color:var(--am)}
+.sim{background:#3a2d00;color:var(--am);border-radius:6px;padding:2px 8px;font-size:12px;display:none}
+body.simon .sim{display:inline-block}
+table{border-collapse:collapse;width:100%;font:12px ui-monospace,monospace}td,th{border:1px solid var(--line);padding:3px 5px;text-align:left}
+.wrap{overflow-x:auto}
+.gauge{position:relative;width:200px;height:200px;margin:4px auto 10px}
+.gauge svg{transform:rotate(-90deg)}.gauge .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge .c .v{font-size:40px;color:var(--gn)}
+.chg{color:var(--cy);animation:p 1.2s ease-in-out infinite}
+@keyframes p{50%{opacity:.35}}@media(prefers-reduced-motion:reduce){.chg{animation:none}}
+canvas{width:100%;height:120px;background:#0a0b0c;border-radius:8px}
+:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+.note{font-size:12px;color:var(--mut)}
+
+:root{--ac:#3aa0ff;--cy:var(--ac)}
+body.m-eco{--ac:#2fe06b}body.m-sport{--ac:#ff3b4a}
+body{background:radial-gradient(130% 55% at 50% -8%,color-mix(in srgb,var(--ac) 26%,#000),#000 62%) fixed,#000}
+.card{background:linear-gradient(160deg,#171a1f,#0e1014);border-color:color-mix(in srgb,var(--ac) 28%,#23272c);border-radius:16px}
+button.b,a.b{background:color-mix(in srgb,var(--ac) 16%,#0b0d10);border-color:var(--ac);color:var(--ac)}
+a.b{display:inline-block;padding:9px 12px;border:1px solid var(--ac);border-radius:8px;text-decoration:none}
+a{color:var(--ac)}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:9;display:flex;overflow:visible;background:rgba(8,9,11,.93);backdrop-filter:blur(12px);border:0;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0)}
+nav button{flex:1;min-width:0;padding:8px 2px 6px;font-size:11px;border:0;color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button span{font-size:20px}nav button.a{color:var(--ac);border:0}
+.pills{display:flex;gap:8px;margin-bottom:12px}
+.pills button{flex:1;padding:10px 4px;border-radius:999px;border:1px solid var(--line);background:#0d0f12;color:var(--tx);font:inherit}
+.pills button.a{border-color:var(--ac);color:var(--ac);box-shadow:0 0 14px color-mix(in srgb,var(--ac) 45%,transparent)}
+.hero{display:grid;grid-template-columns:160px 1fr;gap:10px;align-items:center;margin-bottom:10px}
+.hero .gauge{width:160px;height:160px;margin:0}.hero .gauge svg{width:160px;height:160px;filter:drop-shadow(0 0 8px var(--ac))}
+.gauge .c .v{font-size:30px;color:var(--ac)}.gauge .c .k{font-size:11px;text-align:center}
+#arc{stroke:var(--ac)}
+.stat{display:flex;justify-content:space-between;gap:6px;padding:7px 0;border-bottom:1px solid #22262b}.stat:last-child{border:0}
+.bar{height:8px;border-radius:6px;background:#23272b;margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--ac);box-shadow:0 0 10px var(--ac);transition:width .6s}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);text-align:center}.trio .v{font-size:20px}
+.loc{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--tx);text-decoration:none}
+#d-mode{color:var(--ac);letter-spacing:.5px}
+
+/* ===== modern refresh ===== */
+body{font-family:Inter,"SF Pro Text","Segoe UI",Roboto,system-ui,sans-serif}
+header{border:0;padding:16px 16px 6px}
+h1{font-size:19px;font-weight:700}h1 b{font-weight:500;color:var(--ac)}
+.st{padding:4px 10px;border-radius:999px;background:#ffffff0d}.st.on{background:#2fe06b22}.st.bad{background:#ff5a5a1f}
+.card{background:#ffffff08;border:1px solid #ffffff12;border-radius:20px;padding:14px;backdrop-filter:blur(8px)}
+.pills{background:#ffffff0a;border-radius:999px;padding:4px;gap:2px}
+.pills button{border:0;background:none;color:var(--mut);padding:9px 2px}
+.pills button.a{background:color-mix(in srgb,var(--ac) 22%,#0b0d10);color:var(--ac);box-shadow:none}
+.hero2{display:flex;flex-direction:column;align-items:center;text-align:center;padding:18px 14px 14px}
+.hero2 .gauge{width:230px;height:230px;margin:0}
+.hero2 .gauge svg{width:230px;height:230px;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--ac) 60%,transparent))}
+.hero2 .gauge .c .v{font-size:52px;font-weight:700;color:var(--tx);line-height:1}
+.hero2 .gauge .c .k{font-size:12px;margin-top:2px}
+.ct{font-size:14px;font-weight:600;color:var(--mut);margin-top:8px}.ct .chg{color:var(--ac)}
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;margin-top:14px}
+.chips>div{background:#ffffff08;border-radius:14px;padding:10px 4px}.chips b{font-size:17px;font-variant-numeric:tabular-nums}
+#d-rng{font-size:34px;font-weight:700}#d-claim{color:var(--mut)}
+.loc{cursor:pointer}
+.mapcard{position:relative;padding:0;overflow:hidden}
+#gmap{display:block;width:100%;height:auto;aspect-ratio:600/440;border-radius:0;background:radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--ac) 14%,#0a0b0c),#07080a 70%)}
+.mspd{position:absolute;left:14px;top:12px}.mspd b{font-size:46px;font-weight:700;line-height:1}.mspd small{color:var(--mut);margin-left:4px}
+.quad{display:grid;grid-template-columns:repeat(3,1fr);text-align:center}.quad .v{font-size:19px}
+
+/* ===== settings categories ===== */
+.cat{padding:0;overflow:hidden}
+.cat>summary{list-style:none;display:flex;align-items:center;gap:12px;padding:15px 14px;cursor:pointer;font-weight:600}
+.cat>summary::-webkit-details-marker{display:none}
+.cat>summary small{display:block;color:var(--mut);font-weight:400;font-size:12px;margin-top:1px}
+.cat>summary .ic{font-size:22px;width:34px;text-align:center}
+.cat>summary::after{content:"›";margin-left:auto;font-size:22px;color:var(--mut);transition:transform .2s}
+.cat[open]>summary::after{transform:rotate(90deg)}
+.cat .body{padding:2px 14px 14px;border-top:1px solid #ffffff10}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #ffffff0d}
+.opt:last-child{border:0}.opt small{display:block;color:var(--mut);font-size:12px}
+.opt input[type=checkbox]{width:22px;height:22px;accent-color:var(--ac);flex:none}
+.fld{display:grid;grid-template-columns:1fr 100px;align-items:center;gap:8px;padding:8px 0}
+.fld input{width:100%;text-align:right}
+
+/* ===== scooter side view ===== */
+.bike{padding:12px 12px 6px;background:radial-gradient(120% 90% at 50% 100%,color-mix(in srgb,var(--ac) 16%,#0b0d10),#0a0b0d 70%)}
+.bk-h{display:flex;justify-content:space-between;align-items:center;font-size:16px}
+.chip{font-size:11px;padding:4px 10px;border-radius:999px;background:#ffffff0d;color:var(--ac);font-weight:600}
+.bike svg{display:block;width:100%;height:auto;margin-top:2px}
+#sc-beam{opacity:.25;transition:opacity .4s}.riding #sc-beam{opacity:1}
+.wh{transform-box:fill-box;transform-origin:center}.riding .wh{animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.charging #sc-bat{animation:p 1.2s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.riding .wh,.charging #sc-bat{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Komaki X1 <b>Range Pro</b></h1>
+  <span class="sim">SIMULATION: not real data</span>
+  <span id="st" class="st">Disconnected</span>
+</header>
+<nav id="nav"></nav>
+<main>
+
+<section id="s-dash" class="a">
+  <button class="b g" id="hConn" style="width:100%;padding:14px;margin-bottom:10px;font-size:16px">Pair scooter (one time)</button>
+  <div class="pills" id="pills"><button data-m="Auto">✨ Auto</button><button data-m="Eco">🍃 Eco</button><button data-m="Normal">⏱ Normal</button><button data-m="Sport">⚡ Sport</button></div>
+  <div class="card bike"><div class="bk-h"><b>Komaki X1</b><span class="chip" id="sc-st">Not connected</span></div>
+<svg viewBox="0 0 360 170" role="img" aria-label="Komaki X1 scooter, side view"><defs>
+<linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d333b"/><stop offset="1" stop-color="#101216"/></linearGradient>
+<linearGradient id="gs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:var(--ac);stop-opacity:0"/><stop offset=".5" style="stop-color:var(--ac)"/><stop offset="1" style="stop-color:var(--ac);stop-opacity:0"/></linearGradient>
+<linearGradient id="gl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:var(--ac);stop-opacity:.6"/><stop offset="1" style="stop-color:var(--ac);stop-opacity:0"/></linearGradient>
+<radialGradient id="gg"><stop offset="0" style="stop-color:var(--ac);stop-opacity:.4"/><stop offset="1" style="stop-color:var(--ac);stop-opacity:0"/></radialGradient></defs>
+<ellipse cx="180" cy="154" rx="165" ry="10" fill="url(#gg)"/><path d="M14 153H346" stroke="#ffffff14"/>
+<text x="20" y="52" style="fill:var(--tx);font:700 42px system-ui,sans-serif"><tspan id="sc-rng">--</tspan><tspan dx="6" style="fill:var(--mut);font:500 15px system-ui,sans-serif">km range</tspan></text>
+<path id="sc-beam" d="M306 54L360 28V86Z" fill="url(#gl)"/>
+<g transform="translate(82 121)"><circle r="27" fill="#0b0c0e" stroke="#15181c" stroke-width="9"/><circle r="20" fill="#14171b" style="stroke:var(--ac)" stroke-width="2"/><g class="wh"><g stroke="#4a525c" stroke-width="2.2" stroke-linecap="round"><line x2="17"/><line x2="5.3" y2="16.2"/><line x2="-13.8" y2="10"/><line x2="-13.8" y2="-10"/><line x2="5.3" y2="-16.2"/></g></g><circle r="4.5" fill="#222830"/></g><g transform="translate(284 121)"><circle r="27" fill="#0b0c0e" stroke="#15181c" stroke-width="9"/><circle r="20" fill="#14171b" style="stroke:var(--ac)" stroke-width="2"/><g class="wh"><g stroke="#4a525c" stroke-width="2.2" stroke-linecap="round"><line x2="17"/><line x2="5.3" y2="16.2"/><line x2="-13.8" y2="10"/><line x2="-13.8" y2="-10"/><line x2="5.3" y2="-16.2"/></g></g><circle r="4.5" fill="#222830"/></g>
+<path d="M48 112C48 76 116 76 116 112" fill="none" stroke="#23272e" stroke-width="6" stroke-linecap="round"/>
+<path d="M250 112C250 76 318 76 318 112" fill="none" stroke="#23272e" stroke-width="6" stroke-linecap="round"/>
+<path d="M58 104C56 82 98 70 150 72L204 84V110L112 112C84 112 62 110 58 104Z" fill="url(#gb)" stroke="#ffffff14"/>
+<path d="M66 98C104 90 154 92 204 100" fill="none" stroke="url(#gs)" stroke-width="3" stroke-linecap="round"/>
+<path d="M66 76C88 62 140 60 172 68C176 70 176 76 170 77C138 72 96 74 70 86C64 86 62 80 66 76Z" fill="#1b1e23" stroke="#ffffff1a"/>
+<rect x="150" y="108" width="100" height="14" rx="7" fill="url(#gb)" stroke="#ffffff14"/>
+<rect x="160" y="113" width="80" height="4" rx="2" fill="#000" opacity=".55"/><rect id="sc-bat" x="160" y="113" width="0" height="4" rx="2" style="fill:var(--ac)"/>
+<path d="M240 108C250 86 254 62 258 40L272 42C270 66 272 90 282 108Z" fill="url(#gb)" stroke="#ffffff14"/>
+<path d="M276 100L284 121" stroke="#2d323a" stroke-width="7" stroke-linecap="round"/>
+<path d="M248 40L286 33" stroke="#2d323a" stroke-width="7" stroke-linecap="round"/><path d="M281 33.8L290 32.2" style="stroke:var(--ac)" stroke-width="7" stroke-linecap="round"/>
+<path d="M284 50C296 46 304 50 306 56C298 60 290 58 284 56Z" fill="#fff"/>
+<circle cx="52" cy="91" r="9" fill="#ff3b4a" opacity=".25"/><rect x="48" y="88" width="8" height="5" rx="2" fill="#ff3b4a"/></svg></div>
+  <div class="card hero2">
+    <div class="gauge"><svg width="200" height="200" viewBox="0 0 200 200"><circle cx="100" cy="100" r="88" fill="none" stroke="#23272b" stroke-width="14"/><circle id="arc" cx="100" cy="100" r="88" fill="none" stroke-width="14" stroke-linecap="round" stroke-dasharray="553" stroke-dashoffset="553"/></svg>
+      <div class="c"><div class="v" id="d-soc">N/A</div><div class="k">Battery</div><div class="ct" id="d-ct">Connect to see charging</div></div></div>
+    <div class="note" id="d-cnote" style="margin-top:8px"></div>
+    <div class="chips"><div><div class="k">Voltage</div><b id="d-v">N/A</b></div><div><div class="k">Current</div><b id="d-i">N/A</b></div><div><div class="k">Temp</div><b id="d-t">N/A</b></div></div>
+  </div>
+  <div class="card"><div class="k">Estimated range <span id="d-claim">of 70 km claimed</span></div><div class="v" id="d-rng">N/A</div><div class="bar"><i id="d-bar"></i></div><div class="note" id="d-rsrc" style="margin-top:6px"></div>
+    <div class="row" style="display:none"><button class="b g" id="dRide">Start ride manually</button></div><div class="note">Automatic: rides start and stop from power use.</div></div>
+  <div class="card"><b id="d-mode">NORMAL MODE</b><div class="note" id="d-tag"></div></div>
+  <div class="card trio"><div><div class="k">Power now</div><div class="v" id="d-spd">0 W</div></div><div><div class="k">Ride energy</div><div class="v" id="d-dist">0 Wh</div></div><div><div class="k">Ride time</div><div class="v" id="d-time">00:00</div></div></div>
+  <div class="grid" id="d-grid"></div>
+  <div class="card" style="margin-top:10px"><div class="k">Battery charge history</div><canvas id="cv" width="600" height="120"></canvas></div>
+</section>
+
+<section id="s-ble">
+  <details class="card cat" open><summary><span class="ic">🔋</span><span>Battery and range<small>Capacity and range per mode</small></span></summary><div class="body">
+    <div class="fld"><span>Battery capacity (Wh)</span><input id="cap" type="number" placeholder="1500"></div>
+    <div class="fld"><span>Eco range (km)</span><input id="rEco" type="number"></div>
+    <div class="fld"><span>Normal range (km)</span><input id="rNormal" type="number"></div>
+    <div class="fld"><span>Sport range (km)</span><input id="rSport" type="number"></div>
+    <div class="row" style="margin:6px 0 0"><button class="b g" id="bRated">Save</button></div>
+    <div class="note">Eco is the company claim of 70 km. The live range also follows your power use.</div></div></details>
+  <details class="card cat"><summary><span class="ic">🛵</span><span>Rides<small>Automatic ride tracking</small></span></summary><div class="body">
+    <label class="opt"><span>Auto ride<small>Starts when the scooter uses power, stops after 3 min idle</small></span><input type="checkbox" id="autoR"></label></div></details>
+  <details class="card cat"><summary><span class="ic">🔗</span><span>Connection<small>Bluetooth link to the scooter</small></span></summary><div class="body">
+    <label class="opt"><span>Auto-reconnect<small>Connect again by itself when the link drops</small></span><input type="checkbox" id="auto" checked></label>
+    <label class="opt"><span>Live updates<small>Refresh battery data every 2 seconds</small></span><input type="checkbox" id="poll"></label>
+    <div class="row" style="margin:8px 0 0"><button class="b g" id="bConn">Connect</button><button class="b r" id="bDis" disabled>Disconnect</button></div></div></details>
+  <details class="card cat"><summary><span class="ic">🧰</span><span>Advanced<small>For testing and troubleshooting</small></span></summary><div class="body">
+    <label class="opt"><span>Simulation mode<small>Fake data, not from your scooter</small></span><input type="checkbox" id="simT"></label>
+    <div class="row" style="margin-top:8px"><button class="b" onclick="go('an')">Protocol analyzer</button></div>
+    <div class="k">Discovered services</div><pre id="disc">Not connected.</pre>
+    <div class="row" style="margin-top:12px"><b>Incoming packets</b><button class="b" id="bSave">Save</button><button class="b" id="bClr">Clear</button></div><div class="log" id="plog"></div>
+    <b style="display:block;margin-top:12px">Manual hex test</b><div class="note">Each send asks you to confirm.</div>
+    <div class="row"><select id="tgt"><option value="tx">FF02 (send)</option><option value="cu">Custom 2B12</option></select></div>
+    <textarea id="hexin" placeholder="e.g. 01 02 03"></textarea>
+    <div class="row"><button class="b" id="bSend">Send</button></div>
+    <div class="k">Outgoing history</div><div class="log" id="olog"></div></div></details>
+</section>
+
+<section id="s-an">
+  <div class="card"><b>JBD decoder (candidate)</b>
+    <div class="note">Public JBD/Xiaoxiang protocol. Frames are checked (start DD, end 77, checksum) before use. Whether your scooter uses it is unconfirmed, so values stay marked unverified until you tick the box.</div>
+    <pre id="jst" style="margin:8px 0">No valid JBD frame yet.</pre>
+    <div class="row"><button class="b" id="bJ3">Send read-info request</button><button class="b" id="bJ4">Send read-cells request</button></div>
+    <label class="note"><input type="checkbox" id="jok" style="width:auto"> I checked these values against a real measurement</label></div>
+  <div class="card"><b>Packet groups</b><div class="note">Packets grouped by length.</div><div class="wrap" id="groups"></div></div>
+  <div class="card"><b>Byte positions</b>
+    <div class="row"><label>Length <select id="gl"></select></label></div>
+    <div class="wrap" id="bytes"></div>
+    <div class="note">Hints are guesses to test, not facts. Constant first bytes may be a header. A byte that rises by 1 each packet may be a counter. A last byte equal to the sum or XOR of earlier bytes may be a checksum.</div>
+    <div id="hints" class="note"></div></div>
+  <div class="card"><b>Compare at different charge levels</b>
+    <div class="row"><input id="snapV" placeholder="Real SOC %"><button class="b" id="bSnap">Snapshot latest</button><button class="b" id="bSnapC">Clear</button></div>
+    <div class="wrap" id="snaps"></div><div class="note">Bytes that differ between snapshots are highlighted.</div></div>
+  <div class="card"><b>Field mapping</b>
+    <div class="note">Choose offsets, then verify each against a real measurement before ticking Verified.</div>
+    <div class="wrap"><table id="map"></table></div>
+    <div class="row" style="margin-top:8px"><label><input type="checkbox" id="curpos" style="width:auto"> Positive current means charging</label></div>
+    <div class="row"><button class="b" id="bMap">Save mapping</button></div>
+    <div class="k">Decoded preview (latest packet)</div><pre id="prev">-</pre></div>
+</section>
+
+<section id="s-rng">
+  <div class="card"><b>Range from your rides</b><div id="rngOut"></div></div>
+  <div class="card"><b>Charging history</b><div class="wrap" id="chgh"></div><div class="note" id="chgs"></div></div>
+  <div class="card"><b>Ride log</b><div class="wrap" id="rides"></div><div class="row"><button class="b r" id="bRC">Clear rides</button></div></div>
+</section>
+
+
+<section id="s-gps">
+  <div class="card"><div class="note">Rides start by themselves when the scooter uses power and stop after 3 minutes with no use, or when charging starts.</div>
+    <div class="row" style="display:none"><select id="mode"><option>Eco</option><option>Normal</option><option>Sport</option></select><button id="bRs">Start</button><button id="bRe" disabled>Stop</button></div></div>
+  <div class="grid" id="g-grid"></div>
+</section>
+</main>
+
+<script>
+"use strict";
+/* ======================= CONFIG ======================= */
+// Confirmed UUIDs from the scooter's Android BLE log. Characteristics are found by UUID, never by handle.
+const U={svc:"0000ff00-0000-1000-8000-00805f9b34fb",rx:"0000ff01-0000-1000-8000-00805f9b34fb",tx:"0000ff02-0000-1000-8000-00805f9b34fb",
+  csvc:"00010203-0405-0607-0809-0a0b0c0d1912",cch:"00010203-0405-0607-0809-0a0b0c0d2b12"};
+const $=s=>document.querySelector(s);
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const hex=b=>b.map(x=>x.toString(16).padStart(2,"0")).join(" ");
+const asc=b=>b.every(x=>x>=32&&x<127||x==10||x==13)?String.fromCharCode(...b).replace(/\s/g," "):"";
+
+/* ======================= STATE ======================= */
+const S={real:[],sim:[],sent:[],snaps:LS.get("snaps",[]),map:LS.get("map",{}),cap:LS.get("cap",1500)||1500,rides:LS.get("rides",[]),
+  sim_on:false,dev:null,rxC:null,txC:null,cuC:null,ble:false,socHist:[],tries:0};
+const FIELDS=[["soc","SOC","%"],["volt","Voltage","V"],["cur","Current","A"],["temp","Temperature","°C"]];
+// Fixed demo layout used ONLY by simulation mode: [AA, counter, soc, vHi, vLo, iHi, iLo, temp, checksum]
+const SIMMAP={soc:{off:2,len:1,en:"be",sg:0,sc:1,ad:0,ok:1},volt:{off:3,len:2,en:"be",sg:0,sc:.01,ad:0,ok:1},cur:{off:5,len:2,en:"be",sg:1,sc:.1,ad:0,ok:1},temp:{off:7,len:1,en:"be",sg:0,sc:1,ad:0,ok:1}};
+const pk=()=>S.sim_on?S.sim:S.real;
+const mp=()=>S.sim_on?SIMMAP:S.map;
+
+/* ======================= NAV, MODES, THEME ======================= */
+// Bottom navigation. The Analyzer is opened from Settings. The mode pills change the colour theme and tag your rides.
+// They do not command the scooter, because the scooter's mode command is not known.
+S.pick=LS.get("pick","Auto");S.auto="Normal";S.mode="Normal";S.rated=LS.get("rated70m",{Eco:70,Normal:58,Sport:45});
+const TAG={Eco:"Max range, low power",Normal:"Balanced performance",Sport:"Max power, top speed"};
+[["dash","Home","🏠"],["gps","Ride","🛵"],["rng","History","🕘"],["ble","Settings","⚙️"]].forEach(([id,n,ic])=>{
+  const b=document.createElement("button");b.dataset.t=id;b.innerHTML="<span>"+ic+"</span>"+n;b.onclick=()=>go(id);$("#nav").appendChild(b)});
+function go(id){document.querySelectorAll("section").forEach(e=>e.classList.toggle("a",e.id=="s-"+id));
+  const t=id=="an"?"ble":id;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("a",b.dataset.t==t));render(true);window.scrollTo(0,0)}
+function setMode(m){if(m){S.pick=m;LS.set("pick",m)}S.mode=S.pick=="Auto"?S.auto:S.pick;
+  ["eco","normal","sport"].forEach(x=>document.body.classList.remove("m-"+x));document.body.classList.add("m-"+S.mode.toLowerCase());
+  $("#mode").value=S.mode;document.querySelectorAll("#pills button").forEach(b=>b.classList.toggle("a",b.dataset.m==S.pick));render()}
+// Auto mode is an ESTIMATE from your peak power over the last 90 s. The scooter does not send its mode over this link.
+// The power limits are rough guesses for a 1.5 kWh scooter: change them to suit yours.
+const SPD=[],MODE_W={normal:800,sport:1600};
+function autoMode(P){if(P==null||!R.on)return;const t=Date.now();SPD.push({t,p:P});while(SPD.length&&t-SPD[0].t>9e4)SPD.shift();
+  const pk=Math.max(...SPD.map(x=>x.p)),m=pk>=MODE_W.sport?"Sport":pk>=MODE_W.normal?"Normal":"Eco";
+  if(m!==S.auto){S.auto=m;if(S.pick=="Auto")setMode()}}
+document.querySelectorAll("#pills button").forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+$("#mode").onchange=e=>setMode(e.target.value);
+["Eco","Normal","Sport"].forEach(k=>$("#r"+k).value=S.rated[k]);
+$("#bRated").onclick=()=>{S.rated={Eco:+$("#rEco").value||0,Normal:+$("#rNormal").value||0,Sport:+$("#rSport").value||0};LS.set("rated70m",S.rated);S.cap=+$("#cap").value||1500;LS.set("cap",S.cap);render()};
+
+/* ======================= BLE MODULE ======================= */
+function useDev(d){S.dev=d;d.removeEventListener("gattserverdisconnected",onDrop);d.addEventListener("gattserverdisconnected",onDrop)}
+// Chrome only shows the device chooser after a tap. Where it supports getDevices(), a scooter you picked before is reused with no tap.
+// Otherwise the first tap on "Connect to scooter" is needed, and the app then reconnects by itself whenever the link drops.
+let connecting=false;
+async function autoTry(){
+  if(S.ble||connecting||!navigator.bluetooth||!$("#auto").checked)return;
+  if(!S.dev&&navigator.bluetooth.getDevices){try{const ds=await navigator.bluetooth.getDevices(),l=LS.get("lastDev","");const d=ds.find(x=>x.name==l)||ds[0];if(d)useDev(d)}catch(e){}}
+  if(!S.dev){status("Tap Connect once to pair your scooter");return}connecting=true;
+  try{await attach()}catch(e){status("Waiting for scooter…")}
+  connecting=false}
+setInterval(autoTry,4000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)autoTry()});setTimeout(autoTry,600);
+function status(t,c){const e=$("#st");e.textContent=t;e.className="st "+(c||"")}
+async function bleConnect(){
+  if(!navigator.bluetooth){status("Web Bluetooth not supported here","bad");alert("Use Chrome on Android over HTTPS or localhost.");return}
+  try{
+    // Permission prompt happens here, after the user pressed Connect.
+    useDev(await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[U.svc,U.csvc]}));LS.set("lastDev",S.dev.name||"");
+    await attach();
+  }catch(e){status("Connection failed: "+e.message,"bad")}
+}
+async function attach(){
+  status("Connecting…");
+  const srv=await S.dev.gatt.connect();
+  // Discover by UUID (handles 0x0011, 0x0012, 0x0015, 0x0019 are only observations)
+  const svc=await srv.getPrimaryService(U.svc);
+  S.rxC=await svc.getCharacteristic(U.rx);
+  S.txC=await svc.getCharacteristic(U.tx).catch(()=>null);
+  S.cuC=null;
+  try{S.cuC=await (await srv.getPrimaryService(U.csvc)).getCharacteristic(U.cch)}catch(e){}
+  // Subscribing writes CCCD 0x0002902 = 01 00 under the hood
+  S.rxC.addEventListener("characteristicvaluechanged",ev=>addPacket(Array.from(new Uint8Array(ev.target.value.buffer)),"rx"));
+  await S.rxC.startNotifications();
+  if(S.rxC.properties.read){try{addPacket(Array.from(new Uint8Array((await S.rxC.readValue()).buffer)),"rx")}catch(e){}}
+  S.ble=true;S.tries=0;pollStart();status("Connected: "+(S.dev.name||"scooter"),"on");
+  $("#bConn").disabled=true;$("#bDis").disabled=false;
+  $("#disc").textContent=["Service FF00: found","FF01 (notify): "+(S.rxC?"found":"missing"),"FF02 (write): "+(S.txC?"found":"missing"),
+    "Custom 2B12 (write): "+(S.cuC?"found":"not found")].join("\n");
+}
+function onDrop(){
+  S.ble=false;pollStop();$("#bConn").disabled=false;$("#bDis").disabled=true;status("Disconnected","bad");
+  if($("#auto").checked)setTimeout(autoTry,1500)
+}
+function bleDisconnect(){pollStop();$("#auto").checked=false;if(S.dev&&S.dev.gatt.connected)S.dev.gatt.disconnect();status("Disconnected")}
+async function bleSend(){
+  const bytes=($("#hexin").value.match(/[0-9a-f]{2}/gi)||[]).map(h=>parseInt(h,16));
+  const c=$("#tgt").value=="tx"?S.txC:S.cuC;
+  if(!bytes.length)return alert("Enter hex bytes such as 01 02 03.");
+  if(!S.ble||!c)return alert("Connect first. This characteristic was not found.");
+  if(!confirm("Send "+hex(bytes)+" to the scooter? Unknown commands can have unexpected effects."))return;
+  try{const d=new Uint8Array(bytes);
+    if(c.properties.writeWithoutResponse)await c.writeValueWithoutResponse(d);else await c.writeValue(d);
+    S.sent.push({t:Date.now(),h:hex(bytes)});renderBLE()}catch(e){alert("Send failed: "+e.message)}
+}
+
+/* ======================= CHARGING ======================= */
+// A session starts when the BMS reports more than +0.2 A (JBD: positive = charging) and ends after 60 s without it.
+// Time to full = missing Ah (nominal - remaining) / smoothed charge current. The last few % of a charge usually taper, so treat it as a minimum.
+const C={on:false,t0:0,soc0:null,wh:0,avgI:0,idle:0,hist:LS.get("charges",[])};
+const fmtMin=m=>m>=60?Math.floor(m/60)+" h "+Math.round(m%60)+" min":Math.round(m)+" min";
+function chgUpdate(i,prev){
+  if(i.cur>.2){
+    if(!C.on)Object.assign(C,{on:true,t0:i.t,soc0:i.soc,wh:0,avgI:i.cur});
+    else{C.wh+=i.volt*i.cur*Math.min(i.t-prev,5000)/36e5;C.avgI=C.avgI*.9+i.cur*.1}
+    C.idle=0;
+  }else if(C.on){
+    if(!C.idle)C.idle=i.t;else if(i.t-C.idle>60000)chgEnd(i)}
+}
+function chgEnd(i){const min=(C.idle-C.t0)/6e4;C.on=false;
+  if(min>=2){C.hist.push({t:C.t0,min:Math.round(min),s0:C.soc0,s1:i.soc,wh:Math.round(C.wh)});LS.set("charges",C.hist.slice(-50))}C.idle=0}
+function chgEta(){if(S.sim_on||!J.info||!C.on||C.idle)return null;const m=J.info.nom-J.info.rem;
+  if(m<=.05)return 0;return C.avgI<.3?null:m/C.avgI*60}
+
+/* ======================= LIVE POLLING ======================= */
+// Starts only after you press Connect and only if the switch is on. Sends the read-only JBD
+// requests: info (0x03) every 2 s, cells (0x04) every 10 s. One request at a time.
+let pollT=null,pollN=0,busy=false,wake=null;
+async function jbdWrite(cmd){const d=new Uint8Array([0xDD,0xA5,cmd,0,0xFF,(0x100-cmd)&0xFF,0x77]);
+  if(S.txC.properties.writeWithoutResponse)await S.txC.writeValueWithoutResponse(d);else await S.txC.writeValue(d)}
+async function pollTick(){
+  if(busy||!S.ble||!S.txC)return;busy=true;
+  try{await jbdWrite(3);if(pollN++%5===0){await new Promise(r=>setTimeout(r,300));await jbdWrite(4)}}catch(e){}
+  busy=false}
+function pollStart(){pollStop();if(!$("#poll").checked||!S.txC)return;pollTick();pollT=setInterval(pollTick,2000);
+  try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(w=>wake=w).catch(()=>{})}catch(e){}}
+function pollStop(){clearInterval(pollT);pollT=null;try{wake&&wake.release()}catch(e){}wake=null}
+$("#poll").checked=LS.get("poll",true);
+$("#poll").onchange=e=>{LS.set("poll",e.target.checked);e.target.checked?pollStart():pollStop()};
+
+/* ======================= PACKETS ======================= */
+function addPacket(b,src){
+  const arr=S.sim_on&&src=="sim"?S.sim:S.real;
+  arr.push({t:Date.now(),b:b});if(arr.length>2000)arr.shift();
+  if(src=="rx")jbdFeed(b);
+  const v=(S.sim_on||!J.info)?decode("soc",b):null;if(v!=null){S.socHist.push(v);if(S.socHist.length>300)S.socHist.shift()}
+  render();
+}
+function renderBLE(){
+  const a=pk().slice(-60);
+  $("#plog").innerHTML=a.map(p=>{const d=new Date(p.t),t=d.toLocaleTimeString()+"."+String(d.getMilliseconds()).padStart(3,"0"),s=asc(p.b);
+    return `<span class="rx">${t} [${p.b.length}B] ${hex(p.b)}</span>${s?" | "+s.replace(/</g,"&lt;"):""}`}).join("\n")||"No packets yet.";
+  $("#olog").innerHTML=S.sent.slice(-30).map(x=>`<span class="tx">${new Date(x.t).toLocaleTimeString()} ${x.h}</span>`).join("\n")||"Nothing sent.";
+}
+$("#bSave").onclick=()=>{const blob=new Blob([JSON.stringify(S.real.map(p=>({t:p.t,hex:hex(p.b)})),null,1)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="komaki-packets.json";a.click();
+  LS.set("packets",S.real.slice(-500).map(p=>({t:p.t,b:p.b})))};
+$("#bClr").onclick=()=>{S.real.length=0;S.sim.length=0;render()};
+
+/* ======================= JBD CANDIDATE DECODER ======================= */
+// Public JBD frame: DD cmd status len data... chkHi chkLo 77. Checksum = 0x10000 - sum(status,len,data).
+// BLE notifications arrive in ~20-byte pieces, so bytes are buffered until a whole frame is present.
+const J={buf:[],info:null,cells:null,bad:0,ok:LS.get("jbdok",false)};
+const PROT=["Cell overvoltage","Cell undervoltage","Pack overvoltage","Pack undervoltage","Charge over-temp","Charge under-temp","Discharge over-temp","Discharge under-temp","Charge overcurrent","Discharge overcurrent","Short circuit","Front-end IC error","MOSFET locked"];
+function jbdFeed(b){
+  J.buf.push(...b);
+  for(;;){
+    const i=J.buf.indexOf(0xDD);if(i<0){J.buf=[];return}
+    if(i>0)J.buf.splice(0,i);
+    if(J.buf.length<4)return;
+    const len=J.buf[3];if(len>100){J.buf.shift();continue}
+    const tot=len+7;if(J.buf.length<tot)return;
+    const f=J.buf.splice(0,tot),chk=(0x10000-f.slice(2,4+len).reduce((a,c)=>a+c,0))&0xFFFF;
+    if(f[tot-1]!==0x77||((f[tot-3]<<8)|f[tot-2])!==chk){J.bad++;continue}
+    if(f[2]!==0)continue;
+    const d=f.slice(4,4+len),u=k=>(d[k]<<8)|d[k+1],sg=k=>{const v=u(k);return v>32767?v-65536:v};
+    if(f[1]===3&&len>=23){const n=d[22],t=[];for(let k=0;k<n&&23+2*k+1<len;k++)t.push((u(23+2*k)-2731)/10);
+      S.socHist.push(d[19]);if(S.socHist.length>300)S.socHist.shift();
+      const now=Date.now(),prev=J.info&&J.info.t;
+      J.info={volt:u(0)/100,cur:sg(2)/100,rem:u(4)/100,nom:u(6)/100,cyc:u(8),prot:u(16),soc:d[19],cellsN:d[21],temps:t,t:now};
+      if(R.on&&prev&&J.info.cur<0)R.wh+=J.info.volt*-J.info.cur*Math.min(now-prev,5000)/36e5;
+      if(!J.ok){J.ok=true;LS.set("jbdok",true)}chgUpdate(J.info,prev||now);autoPower(J.info)}
+    else if(f[1]===4){const c=[];for(let k=0;k+1<len;k+=2)c.push(u(k));J.cells=c}
+  }
+}
+function jbdSend(cmd){
+  if(!S.ble||!S.txC)return alert("Connect first.");
+  const b=[0xDD,0xA5,cmd,0,0xFF,(0x100-cmd)&0xFF,0x77];
+  if(!confirm("Send "+hex(b)+"? This is the standard JBD read request. It only asks for data. If the scooter is not JBD it will most likely be ignored."))return;
+  const d=new Uint8Array(b),w=S.txC.properties.writeWithoutResponse?S.txC.writeValueWithoutResponse(d):S.txC.writeValue(d);
+  w.then(()=>{S.sent.push({t:Date.now(),h:hex(b)});render()}).catch(e=>alert("Send failed: "+e.message));
+}
+function renderJbd(){
+  const i=J.info,c=J.cells;
+  $("#jst").textContent=i?["Status: "+(J.ok?"verified by you":"UNVERIFIED"),"SOC "+i.soc+"%  Voltage "+i.volt.toFixed(2)+" V  Current "+i.cur.toFixed(2)+" A",
+    "Capacity "+i.rem.toFixed(2)+" / "+i.nom.toFixed(2)+" Ah  Cycles "+i.cyc,"Temps "+(i.temps.map(x=>x.toFixed(1)+"°C").join(", ")||"N/A"),
+    "Protection: "+(PROT.filter((_,k)=>i.prot>>k&1).join(", ")||"none"),c?"Cells (mV): "+c.join(" "):"Cells: send the cells request",J.bad?"Rejected frames: "+J.bad:""].filter(Boolean).join("\n")
+    :"No valid JBD frame yet."+(J.bad?" Rejected frames: "+J.bad:"");
+  $("#jok").checked=J.ok;
+}
+$("#bJ3").onclick=()=>jbdSend(3);$("#bJ4").onclick=()=>jbdSend(4);
+$("#jok").onchange=e=>{J.ok=e.target.checked;LS.set("jbdok",J.ok);render()};
+
+/* ======================= ANALYZER ======================= */
+function groups(){const g={};pk().forEach(p=>{g[p.b.length]=(g[p.b.length]||0)+1});return g}
+function renderAn(){
+  renderJbd();
+  const g=groups(),ks=Object.keys(g).sort((a,b)=>g[b]-g[a]);
+  $("#groups").innerHTML=ks.length?"<table><tr><th>Length</th><th>Count</th></tr>"+ks.map(k=>`<tr><td>${k} B</td><td>${g[k]}</td></tr>`).join("")+"</table>":"No packets captured.";
+  const sel=$("#gl"),cur=sel.value;sel.innerHTML=ks.map(k=>`<option>${k}</option>`).join("");if(ks.includes(cur))sel.value=cur;
+  const L=+sel.value,ps=pk().filter(p=>p.b.length==L);
+  if(!ps.length){$("#bytes").innerHTML="";$("#hints").textContent="";}
+  else{
+    let rows="<table><tr><th>Off</th><th>Distinct</th><th>Min</th><th>Max</th><th>Last</th><th>Hint</th></tr>";const hints=[];
+    for(let i=0;i<L;i++){const vs=ps.map(p=>p.b[i]),set=new Set(vs);let h="";
+      if(set.size==1)h=i<3?"constant (possible header)":"constant";
+      else{let inc=vs.length>2&&vs.slice(1).every((v,j)=>v==(vs[j]+1&255));if(inc)h="steps +1 (possible counter)";else h="changes"}
+      rows+=`<tr><td>${i}</td><td>${set.size}</td><td>${Math.min(...vs)}</td><td>${Math.max(...vs)}</td><td>${vs[vs.length-1]}</td><td>${h}</td></tr>`}
+    $("#bytes").innerHTML=rows+"</table>";
+    const sum=ps.every(p=>(p.b.slice(0,-1).reduce((a,c)=>a+c,0)&255)==p.b[L-1]),xor=ps.every(p=>(p.b.slice(0,-1).reduce((a,c)=>a^c,0))==p.b[L-1]);
+    $("#hints").textContent=sum?"Last byte matches the sum of earlier bytes in every packet (possible checksum, unverified).":xor?"Last byte matches the XOR of earlier bytes in every packet (possible checksum, unverified).":"No simple sum/XOR checksum found on the last byte.";
+  }
+  // snapshots
+  const sn=S.snaps;let h="";
+  if(sn.length){const n=Math.max(...sn.map(s=>s.b.length));
+    h="<table><tr><th>SOC</th>"+Array.from({length:n},(_,i)=>`<th>${i}</th>`).join("")+"</tr>";
+    sn.forEach(s=>{h+=`<tr><td>${s.soc}%</td>`+Array.from({length:n},(_,i)=>{const diff=sn.some(o=>o.b[i]!==s.b[i]);return `<td class="${diff?"hl":""}">${s.b[i]==null?"":s.b[i].toString(16).padStart(2,"0")}</td>`}).join("")+"</tr>"});h+="</table>"}
+  $("#snaps").innerHTML=h||"No snapshots yet.";
+  // mapping table (built once per visit so typing is not interrupted)
+  if(!mapBuilt){mapBuilt=true;$("#map").innerHTML="<tr><th>Field</th><th>Offset</th><th>Bytes</th><th>Order</th><th>Signed</th><th>Scale</th><th>Add</th><th>Verified</th></tr>"+FIELDS.map(([k,n])=>{
+    const m=S.map[k]||{off:"",len:1,en:"be",sg:0,sc:1,ad:0,ok:0};
+    return `<tr data-k="${k}"><td>${n}</td><td><input class="o" type="number" value="${m.off}" style="width:55px"></td>
+    <td><select class="l"><option ${m.len==1?"selected":""}>1</option><option ${m.len==2?"selected":""}>2</option><option ${m.len==4?"selected":""}>4</option></select></td>
+    <td><select class="e"><option value="be" ${m.en=="be"?"selected":""}>Big</option><option value="le" ${m.en=="le"?"selected":""}>Little</option></select></td>
+    <td><input class="s" type="checkbox" ${m.sg?"checked":""} style="width:auto"></td><td><input class="c" type="number" step="any" value="${m.sc}" style="width:70px"></td>
+    <td><input class="d" type="number" step="any" value="${m.ad}" style="width:60px"></td><td><input class="k" type="checkbox" ${m.ok?"checked":""} style="width:auto"></td></tr>`}).join("");
+  $("#curpos").checked=!!S.map.curPos}
+  const last=pk().slice(-1)[0];
+  $("#prev").textContent=last?FIELDS.map(([k,n,u])=>{const m=mp()[k];return n+": "+(m&&m.off!==""&&m.off!=null?fmt(raw(k,last.b),3)+" "+u+(m.ok?" (verified)":" (unverified)"):"not mapped")}).join("\n"):"-";
+}
+$("#gl").onchange=renderAn;
+$("#bSnap").onclick=()=>{const l=pk().slice(-1)[0],v=$("#snapV").value;if(!l||v==="")return alert("Need a packet and a real SOC value.");
+  S.snaps.push({soc:v,b:l.b.slice()});LS.set("snaps",S.snaps);renderAn()};
+$("#bSnapC").onclick=()=>{S.snaps=[];LS.set("snaps",[]);renderAn()};
+$("#bMap").onclick=()=>{const m={curPos:$("#curpos").checked};
+  document.querySelectorAll("#map tr[data-k]").forEach(r=>{const o=r.querySelector(".o").value;
+    m[r.dataset.k]={off:o===""?"":+o,len:+r.querySelector(".l").value,en:r.querySelector(".e").value,sg:r.querySelector(".s").checked?1:0,
+      sc:+r.querySelector(".c").value||1,ad:+r.querySelector(".d").value||0,ok:r.querySelector(".k").checked?1:0}});
+  S.map=m;LS.set("map",m);render(true)};
+
+/* ======================= DECODER ======================= */
+// raw(): read len bytes at offset in big/little endian, optional two's complement. decode(): apply scale and offset.
+function raw(k,b){const m=mp()[k];if(!m||m.off===""||m.off==null||m.off+m.len>b.length)return null;
+  let v=0;const bs=b.slice(m.off,m.off+m.len);if(m.en=="le")bs.reverse();bs.forEach(x=>v=v*256+x);
+  if(m.sg&&v>=Math.pow(2,8*m.len-1))v-=Math.pow(2,8*m.len);return v*m.sc+m.ad}
+function decode(k,b){return raw(k,b)}
+const fmt=(v,d)=>v==null?"N/A":(+v).toFixed(d==null?1:d);
+function latest(k){if(!S.sim_on&&J.info){const m={soc:J.info.soc,volt:J.info.volt,cur:J.info.cur,temp:J.info.temps[0]};if(m[k]!=null)return m[k]}
+  const a=pk();for(let i=a.length-1;i>=0;i--){const v=raw(k,a[i].b);if(v!=null)return v}return null}
+
+/* ======================= SIMULATION ======================= */
+let simT=null,simSoc=80,simN=0;
+$("#simT").onchange=e=>{S.sim_on=e.target.checked;document.body.classList.toggle("simon",S.sim_on);clearInterval(simT);S.socHist=[];
+  if(S.sim_on)simT=setInterval(()=>{simN=(simN+1)&255;simSoc=Math.max(5,simSoc-.05);const v=Math.round(5400+Math.sin(simN/9)*30),i=Math.round(120+Math.sin(simN/5)*60);
+    const b=[0xAA,simN,Math.round(simSoc),v>>8,v&255,(i>>8)&255,i&255,31];b.push(b.reduce((a,c)=>a+c,0)&255);addPacket(b,"sim")},1000);
+  render()};
+
+/* ======================= RANGE ======================= */
+function kmPerPct(){const r=S.rides.filter(x=>x.dsoc>0&&x.km>0);if(!r.length)return null;return r.reduce((a,x)=>a+x.km,0)/r.reduce((a,x)=>a+x.dsoc,0)}
+function remWh(){ // energy left: battery Ah x live volts when the BMS reports it, else capacity x SOC
+  if(!S.sim_on&&J.info)return J.info.rem*J.info.volt;const soc=latest("soc");return S.cap&&soc!=null?S.cap*soc/100:null}
+function whkmHist(){const r=S.rides.filter(x=>x.wh>0&&x.km>.3);
+  if(r.length)return r.reduce((a,x)=>a+x.wh,0)/r.reduce((a,x)=>a+x.km,0);const k=kmPerPct();return k&&S.cap?S.cap/100/k:null}
+function renderRange(){
+  $("#cap").value=S.cap||"";const rs=S.rides,n=rs.length,tot=rs.reduce((a,x)=>a+x.wh,0);
+  let h=`<div class="grid"><div class="card"><div class="k">Rides saved</div><div class="v">${n}</div></div><div class="card"><div class="k">Average ride</div><div class="v">${n?Math.round(tot/n)+" <small>Wh</small>":'<span class="na">N/A</span>'}</div></div></div>`;
+  const grp={};rs.filter(x=>x.dsoc>0&&x.wh>0).forEach(x=>{const g=grp[x.mode]=grp[x.mode]||{wh:0,d:0};g.wh+=x.wh;g.d+=x.dsoc});
+  h+="<div class='note' style='margin-top:8px'>By mode (Wh per 1% battery)</div>"+(Object.keys(grp).map(g=>`<div>${g}: <b>${(grp[g].wh/grp[g].d).toFixed(1)}</b></div>`).join("")||"<div class='note'>Fills in after a few rides.</div>");
+  $("#rngOut").innerHTML=h;
+  const ch=C.hist;$("#chgh").innerHTML=ch.length?"<table><tr><th>Date</th><th>Time</th><th>Charge</th><th>Wh</th></tr>"+ch.slice().reverse().map(c=>`<tr><td>${new Date(c.t).toLocaleDateString()}</td><td>${fmtMin(c.min)}</td><td>${c.s0}% to ${c.s1}%</td><td>${c.wh}</td></tr>`).join("")+"</table>":"No charges recorded yet. Connect while charging.";
+  const g=ch.filter(c=>c.s1>c.s0&&c.min>0),pct=g.reduce((a,c)=>a+c.s1-c.s0,0),mn=g.reduce((a,c)=>a+c.min,0);
+  $("#chgs").textContent=g.length?"Average charging speed: "+(pct/mn*60).toFixed(1)+"% per hour, about "+fmtMin(100/(pct/mn))+" for 0 to 100%.":"";
+  $("#rides").innerHTML=S.rides.length?"<table><tr><th>Date</th><th>Time</th><th>Wh</th><th>SOC used</th><th>Mode</th><th>Peak W</th></tr>"+S.rides.slice().reverse().map(r=>`<tr><td>${new Date(r.t).toLocaleDateString()}</td><td>${fmtMin((r.dur||0)/60)}</td><td>${Math.round(r.wh)}</td><td>${r.dsoc==null?"N/A":r.dsoc}</td><td>${r.mode}</td><td>${r.max?Math.round(r.max):"-"}</td></tr>`).join("")+"</table>":"No rides saved.";
+}
+$("#bRC").onclick=()=>{if(confirm("Delete all rides?")){S.rides=[];LS.set("rides",[]);render()}};
+
+/* ======================= AUTO RIDE (power based, no GPS) ======================= */
+// JBD: negative current = discharging. The ride clock starts when power use starts (after a 4 s check),
+// stops 3 min after power use ends (the idle time is not counted), or right away when charging starts.
+const R={on:false,auto:false,t0:0,soc0:null,wh:0,max:0};
+const PW={on:0,off:0};
+function autoPower(i){
+  if(!$("#autoR").checked||S.sim_on)return;const now=i.t,drain=i.cur<-.5,chg=i.cur>.5;
+  if(drain){PW.off=0;if(R.on){const P=i.volt*-i.cur;if(P>R.max)R.max=P;autoMode(P)}
+    if(!PW.on)PW.on=now;else if(!R.on&&now-PW.on>4000)rideStart(true,PW.on)}
+  else{PW.on=0;if(R.on&&R.auto){if(chg){PW.off=0;rideStop()}else if(!PW.off)PW.off=now;else if(now-PW.off>180000){const e=PW.off;PW.off=0;rideStop(e)}}}}
+function rideStart(auto,t0){
+  Object.assign(R,{on:true,auto:!!auto,t0:t0||Date.now(),soc0:latest("soc"),wh:0,max:0});SPD.length=0;
+  $("#bRs").disabled=true;$("#bRe").disabled=false;render()}
+function rideStop(end){
+  if(!R.on)return;R.on=false;$("#bRs").disabled=false;$("#bRe").disabled=true;
+  const s1=latest("soc"),dur=Math.round(((end||Date.now())-R.t0)/1e3);
+  if(R.wh>=20||!R.auto){S.rides.push({t:R.t0,km:0,wh:R.wh,dur,max:R.max,mode:S.mode,dsoc:R.soc0!=null&&s1!=null?Math.round(R.soc0-s1):null});LS.set("rides",S.rides)}
+  render()}
+$("#bRs").onclick=()=>rideStart(false);
+$("#bRe").onclick=()=>rideStop();
+$("#autoR").checked=LS.get("autoR",true);
+$("#autoR").onchange=e=>LS.set("autoR",e.target.checked);
+addEventListener("pagehide",()=>{if(R.on)rideStop()});
+
+function renderGps(){
+  const sec=R.on?Math.round((Date.now()-R.t0)/1e3):0,soc=latest("soc"),c=(k,v)=>`<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  $("#g-grid").innerHTML=c("Ride time",String(Math.floor(sec/60)).padStart(2,"0")+":"+String(sec%60).padStart(2,"0"))+c("Energy used",R.on&&R.wh?R.wh.toFixed(0)+" <small>Wh</small>":"N/A")+
+    c("Peak power",R.on&&R.max?Math.round(R.max)+" <small>W</small>":"N/A")+c("Battery",R.on&&R.soc0!=null&&soc!=null?R.soc0+"% to "+Math.round(soc)+"%":"N/A")+
+    c("Ride state",R.on?(R.auto?"Riding (auto)":"Riding"):"Waiting for power use")}
+
+/* Live range: base range for the mode, scaled by how much power you use right now.
+   factor 1 = normal use for the mode. Heavy throttle raises it (range drops), gentle riding lowers it (range rises). */
+const LC={f:1,t:0},REFKMH={Eco:25,Normal:35,Sport:45};
+function modeKm100(){return S.rated[S.mode]||70}
+function loadFactor(P,spd,dis){
+  const full=(!S.sim_on&&J.info&&J.info.nom*J.info.volt)||S.cap||1500,base=modeKm100(),ref=full/base;
+  if(dis&&P>30){const wk=spd>3?P/spd:P/REFKMH[S.mode],fi=Math.max(.4,Math.min(3,wk/ref)),now=Date.now(),dt=LC.t?Math.min(10,(now-LC.t)/1e3):1;
+    LC.f+=(fi-LC.f)*(1-Math.exp(-dt/15));LC.t=now}
+  else LC.t=0;
+  return LC.f}
+
+/* ======================= DASHBOARD ======================= */
+function renderDash(){
+  const soc=latest("soc"),V=latest("volt"),I=latest("cur"),T=latest("temp"),cp=(!S.sim_on&&J.info)?true:!!S.map.curPos;
+  $("#d-soc").innerHTML=soc==null?'<span class="na">N/A</span>':Math.round(soc)+"%";
+  $("#arc").style.strokeDashoffset=soc==null?553:553*(1-Math.max(0,Math.min(100,soc))/100);
+  const e0=chgEta(),isChg=I!=null&&Math.abs(I)>.2&&((I>0)===cp);
+  $("#d-ct").innerHTML=I==null?(S.ble?"Waiting for data…":"Connect to see charging"):isChg?(e0==null?'<span class="chg">⚡ Charging</span>':e0<1?"Fully charged":'<span class="chg">⚡ '+fmtMin(e0)+' to full</span>'):Math.abs(I)<=.2?"Not charging":"Discharging";
+  $("#sc-bat").setAttribute("width",(soc==null?0:Math.max(0,Math.min(100,soc))*.8).toFixed(1));
+  $("#sc-st").textContent=R.on?"Riding":isChg?"Charging":S.ble?"Ready":"Not connected";
+  document.body.classList.toggle("riding",!!R.on);document.body.classList.toggle("charging",!!isChg);
+  const ver=k=>{if(!S.sim_on&&J.info&&["soc","volt","cur","temp"].includes(k))return J.ok?"":'<div class="note">JBD decode, unverified</div>';const m=mp()[k];return m&&m.off!==""&&m.off!=null&&!m.ok&&!S.sim_on?'<div class="note">unverified mapping</div>':""};
+  const kp=kmPerPct(),card=(k,v,u,extra)=>`<div class="card"><div class="k">${k}</div><div class="v">${v==null?'<span class="na">N/A</span>':v+" <small>"+u+"</small>"}</div>${extra||""}</div>`;
+  const P=V!=null&&I!=null?V*Math.abs(I):null,E=S.cap&&soc!=null?S.cap*soc/100:null;
+  // charge time estimate from the recent SOC trend (needs enough history, otherwise N/A)
+  $("#d-grid").innerHTML=
+    card("Power",P==null?null:Math.round(P),"W")+
+    card("Cells min / max / diff",J.cells&&J.cells.length&&!S.sim_on?Math.min(...J.cells)+" / "+Math.max(...J.cells)+" / "+(Math.max(...J.cells)-Math.min(...J.cells)):null,"mV")+
+    card("Remaining energy",E==null?null:E.toFixed(0),"Wh",S.cap?"":'<div class="note">Set capacity in Range</div>')+
+    
+    card("Faults",!S.sim_on&&J.info?(PROT.filter((_,k)=>J.info.prot>>k&1).join(", ")||"None"):null,"");
+  const spd=null,dis=I!=null&&Math.abs(I)>.2&&((I>0)!==cp),f=loadFactor(P,spd,dis),base100=modeKm100();
+  let rng=null,src="Waiting for battery level.";
+  if(soc!=null){rng=soc/100*base100/f;
+    src=S.mode+" mode, "+base100.toFixed(0)+" km at 100%. "+(dis&&P>30?"Using "+Math.round(P)+" W now ("+(f>1.05?"range dropping":f<.95?"range rising":"normal use")+").":"Range changes as you use power.")}
+  $("#d-rng").innerHTML=rng==null?'<span class="na">N/A</span>':rng.toFixed(0)+" <small>km</small>";$("#d-rsrc").textContent=src;$("#sc-rng").textContent=rng==null?"--":rng.toFixed(0);
+  $("#dRide").textContent=R.on?"Stop and save ride":"Start ride manually";$("#dRide").className="b "+(R.on?"r":"g");
+  $("#d-grid").innerHTML+=card("Trip energy",R.on&&R.wh?R.wh.toFixed(0):null,"Wh");
+  const eta=chgEta(),live=C.on&&!S.sim_on;
+  $("#d-cnote").textContent=live?"Charging for "+fmtMin(((C.idle||Date.now())-C.t0)/6e4)+" · "+C.soc0+"% to "+(J.info?J.info.soc:"?")+"%"+(eta>=1?" · full about "+new Date(Date.now()+eta*6e4).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):""):"";
+  $("#d-v").textContent=V==null?"N/A":V.toFixed(1)+" V";$("#d-i").textContent=I==null?"N/A":I.toFixed(1)+" A";$("#d-t").textContent=T==null?"N/A":T.toFixed(0)+"°C";
+  $("#d-mode").textContent=S.mode.toUpperCase()+" MODE";$("#d-tag").textContent=S.pick=="Auto"?"Auto: estimated from your power use":TAG[S.mode];$("#hConn").style.display=S.ble?"none":"block";$("#d-bar").style.width=(rng==null?0:Math.max(0,Math.min(100,rng/(S.rated[S.mode]||70)*100)))+"%";$("#d-claim").textContent="of "+(S.rated[S.mode]||70)+" km claimed";
+  const sec=R.on?Math.round((Date.now()-R.t0)/1e3):0;
+  $("#d-spd").textContent=(P==null||!dis?0:Math.round(P))+" W";$("#d-dist").textContent=Math.round(R.on?R.wh:0)+" Wh";
+  $("#d-time").textContent=String(Math.floor(sec/60)).padStart(2,"0")+":"+String(sec%60).padStart(2,"0");
+  const cv=$("#cv"),x=cv.getContext("2d");x.clearRect(0,0,600,120);const h=S.socHist;
+  if(h.length>1){x.strokeStyle="#2fe06b";x.lineWidth=2;x.beginPath();h.forEach((v,i)=>{const X=i/(h.length-1)*590+5,Y=115-v/100*110;i?x.lineTo(X,Y):x.moveTo(X,Y)});x.stroke()}
+}
+
+/* ======================= RENDER ======================= */
+let mapBuilt=false;
+let rT=0,rQ=null;
+function render(force){if(force){doRender(true);return}if(rQ)return;
+  rQ=setTimeout(()=>{rQ=null;rT=performance.now();if(!document.hidden)doRender()},Math.max(0,250-(performance.now()-rT)))}
+setInterval(()=>{if(R.on&&!document.hidden)render()},1000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)render()});
+function doRender(force){const a=document.querySelector("section.a").id;if(force)mapBuilt=false;
+  if(a=="s-dash")renderDash();else if(a=="s-ble")renderBLE();else if(a=="s-an")renderAn();else if(a=="s-rng")renderRange();else renderGps()}
+$("#dRide").onclick=()=>R.on?$("#bRe").click():$("#bRs").click();
+$("#bConn").onclick=bleConnect;$("#hConn").onclick=bleConnect;
+$("#bDis").onclick=bleDisconnect;$("#bSend").onclick=bleSend;
+setMode();
+</script>
+</body>
+</html>
