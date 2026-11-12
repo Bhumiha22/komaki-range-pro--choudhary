@@ -74,6 +74,7 @@ class MainActivity : AppCompatActivity() {
 
         web.settings.apply {
             javaScriptEnabled = true
+            textZoom = 100 // ignore the phone's font-size setting so the layout keeps its proportions
             domStorageEnabled = true
             allowFileAccess = false
             allowContentAccess = false

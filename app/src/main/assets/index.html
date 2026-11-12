@@ -116,6 +116,42 @@ h1{font-size:19px;font-weight:700}h1 b{font-weight:500;color:var(--ac)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .charging #sc-bat{animation:p 1.2s ease-in-out infinite}
 @media(prefers-reduced-motion:reduce){.riding .wh,.charging #sc-bat{animation:none}}
+
+/* ===== premium cluster ===== */
+:root{--hair:#ffffff14;--g:clamp(150px,27dvh,236px)}
+body{font-family:Roboto,"Google Sans",system-ui,sans-serif;letter-spacing:.01em;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+main{padding:4px 14px calc(88px + env(safe-area-inset-bottom,0));max-width:560px}
+header{padding:16px 18px 8px}
+h1{font-size:17px;font-weight:600;letter-spacing:.02em}h1 b{font-weight:300}
+.st{font-size:11.5px;padding:5px 11px;border:1px solid var(--hair);background:transparent}
+.st.on{border-color:#2fe06b55}.st.bad{border-color:#ff5a5a44}
+.card{background:linear-gradient(180deg,#ffffff0b,#ffffff03);border:1px solid var(--hair);border-radius:22px;box-shadow:inset 0 1px 0 #ffffff12,0 14px 30px -20px #000;backdrop-filter:none;margin-bottom:12px}
+#hConn{padding:12px!important;font-size:14px!important;font-weight:500;letter-spacing:.04em;border-radius:16px;margin-bottom:12px!important}
+.pills{padding:3px;margin-bottom:12px;border:1px solid var(--hair);background:#ffffff06}
+.pills button{font-size:13px;font-weight:500;padding:9px 2px;letter-spacing:.02em}
+.bike{padding:14px 14px 4px}.bk-h{font-size:15px;font-weight:600}
+.bike svg{width:100%;height:clamp(96px,16dvh,168px)}
+.hero2{padding:16px 14px 14px}
+.hero2 .gauge,.hero2 .gauge svg{width:var(--g);height:var(--g)}
+.gauge svg circle{stroke-width:6}
+.gauge svg circle:first-child{stroke:#ffffff12}
+.hero2 .gauge svg{filter:drop-shadow(0 0 7px color-mix(in srgb,var(--ac) 55%,transparent))}
+.hero2 .gauge .c{padding:0 17%;text-align:center}
+.hero2 .gauge .c .v{font-size:calc(var(--g)*.25);font-weight:300;letter-spacing:-.02em}
+.hero2 .gauge .c .k{font-size:11px;letter-spacing:.06em}
+.ct{font-size:11px;line-height:1.3;font-weight:500;margin-top:6px}
+.chips{gap:8px;margin-top:14px}.chips>div{background:#ffffff07;border:1px solid #ffffff0d;border-radius:16px;padding:10px 4px}
+.chips b{font-size:16px;font-weight:500}.chips .k{font-size:11px}
+.na{opacity:.45;font-weight:300}
+#d-rng{font-size:38px;font-weight:300;letter-spacing:-.02em}
+.bar{height:5px}
+.v{font-weight:400}
+nav{background:#08090bf5;border-top:1px solid var(--hair);padding-top:4px}
+nav button{font-size:10.5px;letter-spacing:.04em;padding:8px 2px 7px;position:relative;gap:3px}
+nav button span{display:grid;place-items:center;height:24px;font-size:0}
+nav svg,.cat .ic svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+nav button.a::before{content:"";position:absolute;top:-5px;left:30%;right:30%;height:2px;border-radius:2px;background:var(--ac);box-shadow:0 0 10px var(--ac)}
+.cat>summary .ic{color:var(--ac);display:grid;place-items:center}.cat .ic svg{width:22px;height:22px}
 </style>
 </head>
 <body>
@@ -129,7 +165,7 @@ h1{font-size:19px;font-weight:700}h1 b{font-weight:500;color:var(--ac)}
 
 <section id="s-dash" class="a">
   <button class="b g" id="hConn" style="width:100%;padding:14px;margin-bottom:10px;font-size:16px">Pair scooter (one time)</button>
-  <div class="pills" id="pills"><button data-m="Auto">✨ Auto</button><button data-m="Eco">🍃 Eco</button><button data-m="Normal">⏱ Normal</button><button data-m="Sport">⚡ Sport</button></div>
+  <div class="pills" id="pills"><button data-m="Auto">Auto</button><button data-m="Eco">Eco</button><button data-m="Normal">Normal</button><button data-m="Sport">Sport</button></div>
   <div class="card bike"><div class="bk-h"><b>Komaki X1</b><span class="chip" id="sc-st">Not connected</span></div>
 <svg viewBox="0 0 360 170" role="img" aria-label="Komaki X1 scooter, side view"><defs>
 <linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d333b"/><stop offset="1" stop-color="#101216"/></linearGradient>
@@ -167,20 +203,20 @@ h1{font-size:19px;font-weight:700}h1 b{font-weight:500;color:var(--ac)}
 </section>
 
 <section id="s-ble">
-  <details class="card cat" open><summary><span class="ic">🔋</span><span>Battery and range<small>Capacity and range per mode</small></span></summary><div class="body">
+  <details class="card cat" open><summary><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4"/></svg></span><span>Battery and range<small>Capacity and range per mode</small></span></summary><div class="body">
     <div class="fld"><span>Battery capacity (Wh)</span><input id="cap" type="number" placeholder="1500"></div>
     <div class="fld"><span>Eco range (km)</span><input id="rEco" type="number"></div>
     <div class="fld"><span>Normal range (km)</span><input id="rNormal" type="number"></div>
     <div class="fld"><span>Sport range (km)</span><input id="rSport" type="number"></div>
     <div class="row" style="margin:6px 0 0"><button class="b g" id="bRated">Save</button></div>
     <div class="note">Eco is the company claim of 70 km. The live range also follows your power use.</div></div></details>
-  <details class="card cat"><summary><span class="ic">🛵</span><span>Rides<small>Automatic ride tracking</small></span></summary><div class="body">
+  <details class="card cat"><summary><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-5"/></svg></span><span>Rides<small>Automatic ride tracking</small></span></summary><div class="body">
     <label class="opt"><span>Auto ride<small>Starts when the scooter uses power, stops after 3 min idle</small></span><input type="checkbox" id="autoR"></label></div></details>
-  <details class="card cat"><summary><span class="ic">🔗</span><span>Connection<small>Bluetooth link to the scooter</small></span></summary><div class="body">
+  <details class="card cat"><summary><span class="ic"><svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 4V3l5 4L7 17"/></svg></span><span>Connection<small>Bluetooth link to the scooter</small></span></summary><div class="body">
     <label class="opt"><span>Auto-reconnect<small>Connect again by itself when the link drops</small></span><input type="checkbox" id="auto" checked></label>
     <label class="opt"><span>Live updates<small>Refresh battery data every 2 seconds</small></span><input type="checkbox" id="poll"></label>
     <div class="row" style="margin:8px 0 0"><button class="b g" id="bConn">Connect</button><button class="b r" id="bDis" disabled>Disconnect</button></div></div></details>
-  <details class="card cat"><summary><span class="ic">🧰</span><span>Advanced<small>For testing and troubleshooting</small></span></summary><div class="body">
+  <details class="card cat"><summary><span class="ic"><svg viewBox="0 0 24 24"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg></span><span>Advanced<small>For testing and troubleshooting</small></span></summary><div class="body">
     <label class="opt"><span>Simulation mode<small>Fake data, not from your scooter</small></span><input type="checkbox" id="simT"></label>
     <div class="row" style="margin-top:8px"><button class="b" onclick="go('an')">Protocol analyzer</button></div>
     <div class="k">Discovered services</div><pre id="disc">Not connected.</pre>
@@ -254,7 +290,7 @@ const mp=()=>S.sim_on?SIMMAP:S.map;
 // They do not command the scooter, because the scooter's mode command is not known.
 S.pick=LS.get("pick","Auto");S.auto="Normal";S.mode="Normal";S.rated=LS.get("rated70m",{Eco:70,Normal:58,Sport:45});
 const TAG={Eco:"Max range, low power",Normal:"Balanced performance",Sport:"Max power, top speed"};
-[["dash","Home","🏠"],["gps","Ride","🛵"],["rng","History","🕘"],["ble","Settings","⚙️"]].forEach(([id,n,ic])=>{
+[["dash","Home",'<svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>'],["gps","Ride",'<svg viewBox="0 0 24 24"><path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-5"/></svg>'],["rng","History",'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'],["ble","Settings",'<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>']].forEach(([id,n,ic])=>{
   const b=document.createElement("button");b.dataset.t=id;b.innerHTML="<span>"+ic+"</span>"+n;b.onclick=()=>go(id);$("#nav").appendChild(b)});
 function go(id){document.querySelectorAll("section").forEach(e=>e.classList.toggle("a",e.id=="s-"+id));
   const t=id=="an"?"ble":id;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("a",b.dataset.t==t));render(true);window.scrollTo(0,0)}
@@ -554,7 +590,7 @@ function renderDash(){
   $("#d-soc").innerHTML=soc==null?'<span class="na">N/A</span>':Math.round(soc)+"%";
   $("#arc").style.strokeDashoffset=soc==null?553:553*(1-Math.max(0,Math.min(100,soc))/100);
   const e0=chgEta(),isChg=I!=null&&Math.abs(I)>.2&&((I>0)===cp);
-  $("#d-ct").innerHTML=I==null?(S.ble?"Waiting for data…":"Connect to see charging"):isChg?(e0==null?'<span class="chg">⚡ Charging</span>':e0<1?"Fully charged":'<span class="chg">⚡ '+fmtMin(e0)+' to full</span>'):Math.abs(I)<=.2?"Not charging":"Discharging";
+  $("#d-ct").innerHTML=I==null?(S.ble?"Waiting for data…":"Connect to see charging"):isChg?(e0==null?'<span class="chg">Charging</span>':e0<1?"Fully charged":'<span class="chg">'+fmtMin(e0)+' to full</span>'):Math.abs(I)<=.2?"Not charging":"Discharging";
   $("#sc-bat").setAttribute("width",(soc==null?0:Math.max(0,Math.min(100,soc))*.8).toFixed(1));
   $("#sc-st").textContent=R.on?"Riding":isChg?"Charging":S.ble?"Ready":"Not connected";
   document.body.classList.toggle("riding",!!R.on);document.body.classList.toggle("charging",!!isChg);
