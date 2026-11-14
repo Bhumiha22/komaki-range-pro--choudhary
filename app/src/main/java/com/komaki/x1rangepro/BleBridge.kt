@@ -62,6 +62,9 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
     }
 
     @JavascriptInterface
+    fun setLightBars(light: Boolean) { act.runOnUiThread { act.setBarsLight(light) } }
+
+    @JavascriptInterface
     fun keepAwake(on: Boolean) {
         act.runOnUiThread {
             if (on) act.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

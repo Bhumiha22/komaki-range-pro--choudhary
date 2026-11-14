@@ -177,6 +177,59 @@ button.ride .rr{font-size:12px;color:var(--mut);text-align:right}
 @keyframes pd{50%{box-shadow:0 0 0 14px color-mix(in srgb,var(--ac) 8%,transparent)}}
 @media(prefers-reduced-motion:reduce){.posdot{animation:none}}
 .maplibregl-ctrl-attrib{background:#0a0c0fb3!important;color:#9aa4ae!important;font-size:10px}.maplibregl-ctrl-attrib a{color:#9aa4ae!important}
+/* ===== theme tokens, clock, map redesign ===== */
+:root{--glass:#0b0d10d9}
+body.light{--bg:#f3f5f8;--tx:#10151b;--mut:#5a6572;--hair:#0000001a;--line:#dde2e8;--glass:#ffffffeb;color-scheme:light;
+  background:radial-gradient(130% 55% at 50% -8%,color-mix(in srgb,var(--ac) 14%,#fff),#f3f5f8 62%) fixed,#f3f5f8}
+body.light .card{background:linear-gradient(180deg,#fff,#f8fafc);border-color:#0000000f;box-shadow:inset 0 1px 0 #fff,0 12px 26px -18px #1b2a4055}
+body.light .st{background:#0000000a}body.light .st.on{background:#2fe06b22}body.light .st.bad{background:#ff5a5a1f}
+body.light .pills{background:#0000000a;border-color:#0000000d}
+body.light .pills button.a{background:color-mix(in srgb,var(--ac) 16%,#fff);color:var(--ac)}
+body.light button.b,body.light a.b{background:color-mix(in srgb,var(--ac) 12%,#fff)}
+body.light button.b.g{background:#e6f8ec;border-color:#1fb455;color:#118a3f}
+body.light button.b.r{background:#fdeaea;border-color:#e04545;color:#c22d2d}
+body.light input,body.light select,body.light textarea{background:#fff;color:var(--tx);border-color:#d5dae0}
+body.light pre,body.light .log{background:#f1f3f6;color:#222;border-color:#dde2e8}
+body.light .chips>div{background:#00000006;border-color:#0000000a}
+body.light .gauge svg circle:first-child{stroke:#0000000f}
+body.light .hero2 .gauge svg{filter:none}
+body.light .bar{background:#e6e9ee}
+body.light .stat,body.light .opt{border-color:#0000000d}
+body.light .cat .body{border-color:#0000000d}
+body.light nav{background:#fffffff2;border-top-color:#0000000f}
+body.light .bike{background:radial-gradient(120% 90% at 50% 100%,color-mix(in srgb,var(--ac) 14%,#fff),#fff 70%)}
+body.light .chip{background:#0000000a}
+body.light button.ride{background:#00000005;border-color:#0000000d;color:var(--tx)}
+body.light table td,body.light table th{border-color:#dde2e8}
+.clock{display:flex;align-items:flex-end;justify-content:space-between;padding:8px 4px 14px}
+.clock b{font-size:46px;font-weight:300;letter-spacing:-.03em;line-height:1}
+.clock span{font-size:15px;color:var(--mut);margin-left:6px}
+.clock small{color:var(--mut);font-size:13px;text-align:right;line-height:1.3}
+#gmap{aspect-ratio:1/1.14}
+.mapcard{border-radius:26px}
+.msearch{position:absolute;z-index:4;left:12px;right:12px;top:12px;display:flex;align-items:center;gap:10px;height:50px;padding:0 14px;border-radius:18px;background:var(--glass);backdrop-filter:blur(14px);border:1px solid var(--hair);box-shadow:0 10px 26px -12px #000a}
+.msearch svg{width:20px;height:20px;flex:none;fill:none;stroke:var(--mut);stroke-width:1.8;stroke-linecap:round}
+.msearch input{flex:1;min-width:0;width:auto;background:none;border:0;padding:0;font-size:15px;color:var(--tx);outline:none}
+.msearch input::placeholder{color:var(--mut)}
+.msearch #m-x{background:none;border:0;padding:4px;display:grid;place-items:center}
+.msearch #m-x[hidden],.mres[hidden],.mdest[hidden]{display:none}
+.mres{position:absolute;z-index:4;left:12px;right:12px;top:70px;max-height:58%;overflow:auto;border-radius:18px;background:var(--glass);backdrop-filter:blur(14px);border:1px solid var(--hair);box-shadow:0 14px 30px -12px #000a}
+.mres button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--hair);padding:12px 16px;color:var(--tx);font:inherit}
+.mres button:last-child{border:0}.mres small{display:block;color:var(--mut);font-size:12px;margin-top:1px}
+.mapcard .mspd{top:auto;left:12px;bottom:34px;display:flex;align-items:baseline;gap:4px;padding:8px 14px;border-radius:16px;background:var(--glass);border:1px solid var(--hair);backdrop-filter:blur(10px)}
+.mapcard .mspd b{font-size:30px;font-weight:500}
+.mctl{top:auto;bottom:40px}
+.mctl button{background:var(--glass);backdrop-filter:blur(10px)}
+.mctl #m-sat.on{color:var(--ac);border-color:var(--ac)}
+.mstat{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mut);margin:-2px 6px 12px}
+.mstat::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--mut);flex:none}
+.mstat.on::before{background:var(--gn);box-shadow:0 0 8px var(--gn)}
+.mdest{display:flex;align-items:center;gap:8px;padding:12px 14px}
+.mdest .dd{flex:1;min-width:0}.mdest .dd b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mdest .meta{color:var(--mut);font-size:13px}
+button.mini{padding:8px 12px;border-radius:12px;border:1px solid var(--hair);background:none;color:var(--tx);font:inherit;font-size:13px}
+.destpin{width:18px;height:18px;border-radius:50%;background:#ff5a5a;border:3px solid #fff;box-shadow:0 0 0 6px #ff5a5a44}
+.msearch input::-webkit-search-cancel-button,.msearch input::-webkit-search-decoration{-webkit-appearance:none;display:none}
 </style>
 </head>
 <body>
@@ -189,6 +242,7 @@ button.ride .rr{font-size:12px;color:var(--mut);text-align:right}
 <main>
 
 <section id="s-dash" class="a">
+  <div class="clock"><div><b id="clk-t">--:--</b><span id="clk-s"></span></div><small id="clk-d"></small></div>
   <button class="b g" id="hConn" style="width:100%;padding:14px;margin-bottom:10px;font-size:16px">Pair scooter (one time)</button>
   <div class="pills" id="pills"><button data-m="Auto">Auto</button><button data-m="Eco">Eco</button><button data-m="Normal">Normal</button><button data-m="Sport">Sport</button></div>
   <div class="card bike"><div class="bk-h"><b>Komaki X1</b><span class="chip" id="sc-st">Not connected</span></div>
@@ -228,6 +282,9 @@ button.ride .rr{font-size:12px;color:var(--mut);text-align:right}
 </section>
 
 <section id="s-ble">
+  <details class="card cat" open><summary><span class="ic"><svg viewBox="0 0 24 24"><path d="M21 13.5A8.5 8.5 0 1 1 10.5 3a7 7 0 0 0 10.5 10.5z"/></svg></span><span>Appearance<small>Light or dark look</small></span></summary><div class="body">
+    <div class="pills" id="themePills" style="margin:10px 0"><button data-th="auto">Auto</button><button data-th="light">Light</button><button data-th="dark">Dark</button></div>
+    <div class="note">Auto uses the light look from 6 am to 6 pm and the dark look at night. The map follows it.</div></div></details>
   <details class="card cat" open><summary><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4"/></svg></span><span>Battery and range<small>Capacity and range per mode</small></span></summary><div class="body">
     <div class="fld"><span>Battery capacity (Wh)</span><input id="cap" type="number" placeholder="1500"></div>
     <div class="fld"><span>Eco range (km)</span><input id="rEco" type="number"></div>
@@ -285,19 +342,23 @@ button.ride .rr{font-size:12px;color:var(--mut);text-align:right}
 
 <section id="s-gps">
   <div class="card mapcard" id="mapcard">
-    <canvas id="gmap" width="600" height="440"></canvas>
+    <canvas id="gmap" width="600" height="660"></canvas>
     <div id="mlmap"></div>
+    <form class="msearch" id="m-form" autocomplete="off" role="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="m-q" type="search" placeholder="Where do you want to go?" enterkeyhint="search" aria-label="Search a place"><button type="button" id="m-x" hidden aria-label="Clear search"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></form>
+    <div class="mres" id="m-res" hidden></div>
     <div class="mspd"><b id="m-spd">0</b><small>km/h</small></div>
-    <div class="mmsg" id="m-msg">Waiting for GPS…</div>
     <div class="mctl">
+      <button id="m-sat" aria-label="Satellite view"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 16.5l9 5 9-5"/></svg></button>
       <button id="m-in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
       <button id="m-out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
       <button id="m-loc" aria-label="Back to my location"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
     </div>
   </div>
+  <div class="mstat" id="m-msg">Waiting for GPS…</div>
+  <div class="card mdest" id="m-dest" hidden></div>
   <div class="card trio" id="m-grid"></div>
-  <div class="card"><div class="note">Rides start by themselves when the scooter uses power and stop after 3 minutes with no use, or when charging starts.</div>
-    <div class="row" style="display:none"><select id="mode"><option>Eco</option><option>Normal</option><option>Sport</option></select><button id="bRs">Start</button><button id="bRe" disabled>Stop</button></div></div>
+  <div class="note" style="margin:0 4px 12px">A ride starts when the scooter uses power. GPS keeps it going on a downhill when you are not using power, and it stops after 3 minutes standing still.</div>
+  <div class="row" style="display:none"><select id="mode"><option>Eco</option><option>Normal</option><option>Sport</option></select><button id="bRs">Start</button><button id="bRe" disabled>Stop</button></div>
   <div class="grid" id="g-grid"></div>
   <div class="card"><b>Saved rides</b><div id="m-list" style="margin-top:8px"></div></div>
 </section>
@@ -407,6 +468,7 @@ async function bleSend(){
 const C={on:false,t0:0,soc0:null,wh:0,avgI:0,idle:0,hist:LS.get("charges",[])};
 const fmtMin=m=>m>=60?Math.floor(m/60)+" h "+Math.round(m%60)+" min":Math.round(m)+" min";
 function chgUpdate(i,prev){
+  if(window.gpsMoving&&window.gpsMoving()){C.on=false;C.idle=0;return} // regen on a downhill is not a charging session
   if(i.cur>.2){
     if(!C.on)Object.assign(C,{on:true,t0:i.t,soc0:i.soc,wh:0,avgI:i.cur});
     else{C.wh+=i.volt*i.cur*Math.min(i.t-prev,5000)/36e5;C.avgI=C.avgI*.9+i.cur*.1}
@@ -590,7 +652,7 @@ function autoPower(i){
   if(!$("#autoR").checked||S.sim_on)return;const now=i.t,drain=i.cur<-.5,chg=i.cur>.5;
   if(drain){PW.off=0;if(R.on){const P=i.volt*-i.cur;if(P>R.max)R.max=P;autoMode(P)}
     if(!PW.on)PW.on=now;else if(!R.on&&now-PW.on>4000)rideStart(true,PW.on)}
-  else{PW.on=0;if(R.on&&R.auto){if(chg){PW.off=0;rideStop()}else if(!PW.off)PW.off=now;else if(now-PW.off>180000){const e=PW.off;PW.off=0;rideStop(e)}}}}
+  else{PW.on=0;if(R.on&&R.auto){if(window.gpsMoving&&window.gpsMoving()){PW.off=0}else if(chg){PW.off=0;rideStop()}else if(!PW.off)PW.off=now;else if(now-PW.off>180000){const e=PW.off;PW.off=0;rideStop(e)}}}}
 function rideStart(auto,t0){
   Object.assign(R,{on:true,auto:!!auto,t0:t0||Date.now(),soc0:latest("soc"),wh:0,max:0});SPD.length=0;
   $("#bRs").disabled=true;$("#bRe").disabled=false;render()}
@@ -627,7 +689,7 @@ function renderDash(){
   const soc=latest("soc"),V=latest("volt"),I=latest("cur"),T=latest("temp"),cp=(!S.sim_on&&J.info)?true:!!S.map.curPos;
   $("#d-soc").innerHTML=soc==null?'<span class="na">N/A</span>':Math.round(soc)+"%";
   $("#arc").style.strokeDashoffset=soc==null?553:553*(1-Math.max(0,Math.min(100,soc))/100);
-  const e0=chgEta(),isChg=I!=null&&Math.abs(I)>.2&&((I>0)===cp);
+  const e0=chgEta(),isChg=I!=null&&Math.abs(I)>.2&&((I>0)===cp)&&!(window.gpsMoving&&window.gpsMoving());
   $("#d-ct").innerHTML=I==null?(S.ble?"Waiting for data…":"Connect to see charging"):isChg?(e0==null?'<span class="chg">Charging</span>':e0<1?"Fully charged":'<span class="chg">'+fmtMin(e0)+' to full</span>'):Math.abs(I)<=.2?"Not charging":"Discharging";
   $("#sc-bat").setAttribute("width",(soc==null?0:Math.max(0,Math.min(100,soc))*.8).toFixed(1));
   $("#sc-st").textContent=R.on?"Riding":isChg?"Charging":S.ble?"Ready":"Not connected";
@@ -674,6 +736,7 @@ $("#bConn").onclick=bleConnect;$("#hConn").onclick=bleConnect;
 $("#bDis").onclick=bleDisconnect;$("#bSend").onclick=bleSend;
 setMode();
 </script>
+<script src="theme.js"></script>
 <script src="maplibre-gl.js"></script>
 <script src="ridemap.js"></script>
 </body>

@@ -29,6 +29,17 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
     private lateinit var ble: BleBridge
+    private lateinit var rootView: FrameLayout
+
+    /** Matches status/navigation bar icons and the window background to the app's light or dark theme. */
+    fun setBarsLight(light: Boolean) {
+        val c = if (light) 0xFFF3F5F8.toInt() else Color.BLACK
+        rootView.setBackgroundColor(c); web.setBackgroundColor(c)
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = light; isAppearanceLightNavigationBars = light
+        }
+    }
+
     private var insets = intArrayOf(0, 0, 0, 0) // left, top, right, bottom in CSS px
 
     /** Gives the page the real safe-area sizes (notch, status bar, gesture bar) as CSS variables. */
@@ -92,6 +103,7 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(Color.BLACK)
             addView(web, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         }
+        rootView = root
         setContentView(root)
         // Fallback until real insets arrive: status bar height (covers the camera cut-out on most phones)
         val sbId = resources.getIdentifier("status_bar_height", "dimen", "android")
