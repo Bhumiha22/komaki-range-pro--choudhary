@@ -27,10 +27,10 @@
   const kind = () => M.sat ? "sat" : isLight() ? "light" : "dark";
 
   const last0 = LS.get("lastPos", null);
-  const M = { z: last0 ? 16 : 4, lat: last0 ? last0[0] : 20.59, lon: last0 ? last0[1] : 78.96, follow: true, pos: last0, view: null,
-    hd: 0, sat: !!LS.get("mapSat", false), dest: null, nav: null, navInfo: null, needRoute: false };
+  const M = { z: last0 ? 16 : 3.9, lat: last0 ? last0[0] : 22.5, lon: last0 ? last0[1] : 79, follow: true, pos: last0, view: null,
+    hd: 0, sat: !!LS.get("mapSat", false), dest: null, from: null, nav: null, navInfo: null, needRoute: false };
   const T = { watch: null, pts: [], km: 0, vmax: 0, sp: 0, lastT: 0, fixT: 0, hist: [] };
-  let GL = null, glReady = false, glEver = false, glTried = false, curKind = "", posEl = null, posMk = null, destEl = null, destMk = null, routing = false;
+  let GL = null, glReady = false, glEver = false, glTried = false, curKind = "", posEl = null, posMk = null, destEl = null, destMk = null, fromEl = null, fromMk = null, routing = false;
   const accent = () => getComputedStyle(document.body).getPropertyValue("--ac").trim() || "#3aa0ff";
   const visible = () => el("s-gps").classList.contains("a");
   const NAVC = "#ffb02e";
@@ -98,6 +98,10 @@
       const x = px(M.dest.lon, z) - ox, y = py(M.dest.lat, z) - oy;
       ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fillStyle = "#ff5a5a"; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#fff"; ctx.stroke();
     }
+    if (M.from) {
+      const x = px(M.from.lon, z) - ox, y = py(M.from.lat, z) - oy;
+      ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fillStyle = "#2fe06b"; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#fff"; ctx.stroke();
+    }
     if (M.pos && !M.view) {
       const x = px(M.pos[1], z) - ox, y = py(M.pos[0], z) - oy, pulse = 14 + 5 * Math.sin(Date.now() / 400);
       ctx.beginPath(); ctx.arc(x, y, pulse, 0, 7); ctx.fillStyle = ac + "33"; ctx.fill();
@@ -145,6 +149,7 @@
     if (!posEl) {
       posEl = document.createElement("div"); posEl.className = "posdot"; posMk = new maplibregl.Marker({ element: posEl });
       destEl = document.createElement("div"); destEl.className = "destpin"; destMk = new maplibregl.Marker({ element: destEl });
+      fromEl = document.createElement("div"); fromEl.className = "frompin"; fromMk = new maplibregl.Marker({ element: fromEl });
     }
   }
   function glSync() {
@@ -161,6 +166,8 @@
     else if (posEl.isConnected) posMk.remove();
     if (M.dest) { destMk.setLngLat([M.dest.lon, M.dest.lat]); if (!destEl.isConnected) destMk.addTo(GL); }
     else if (destEl.isConnected) destMk.remove();
+    if (M.from) { fromMk.setLngLat([M.from.lon, M.from.lat]); if (!fromEl.isConnected) fromMk.addTo(GL); }
+    else if (fromEl.isConnected) fromMk.remove();
     if (M.follow && !M.view && M.pos) {
       const o = { center: [M.pos[1], M.pos[0]], duration: 900, essential: true };
       if (R.on) { o.zoom = Math.max(GL.getZoom(), 16.5); o.pitch = 50; o.bearing = M.hd; }
@@ -223,65 +230,106 @@
   const up = e => { ptr.delete(e.pointerId); pinch0 = 0; };
   cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
 
-  /* ---------- destination search and route ---------- */
-  const q = el("m-q"), res = el("m-res"), xb = el("m-x");
-  let timer = 0, ctl = null, found = [];
+  /* ---------- from / to search and route (India first) ---------- */
+  const q = el("m-q"), qf = el("m-from"), res = el("m-res"), xb = el("m-x");
+  const INDIA = "68.1,6.7,97.4,35.7"; // west, south, east, north
+  let timer = 0, ctl = null, found = [], active = "to";
   const fmtT = m => m >= 60 ? Math.floor(m / 60) + " h " + Math.round(m % 60) + " min" : Math.max(1, Math.round(m)) + " min";
-  q.addEventListener("input", () => {
-    xb.hidden = !q.value; clearTimeout(timer);
-    const v = q.value.trim(); if (v.length < 3) { res.hidden = true; return; }
-    timer = setTimeout(() => search(v), 450);
-  });
-  el("m-form").addEventListener("submit", e => { e.preventDefault(); clearTimeout(timer); const v = q.value.trim(); if (v.length >= 2) search(v); q.blur(); });
-  xb.onclick = () => { q.value = ""; xb.hidden = true; res.hidden = true; clearDest(); };
   const note = t => { res.innerHTML = '<div class="note" style="padding:12px 14px">' + t + "</div>"; res.hidden = false; };
-  async function search(v) {
+  const near = () => M.pos ? "&lat=" + M.pos[0] + "&lon=" + M.pos[1] : "";
+
+  function fromPhoton(j) {
+    return (j.features || []).map(f => {
+      const p = f.properties || {};
+      return { name: p.name || p.street || p.city || "Place", lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0],
+        sub: [p.name && p.street ? p.street : null, p.district, p.city || p.county, p.state].filter(Boolean).join(", ") };
+    });
+  }
+  function fromNominatim(a) {
+    return (a || []).map(r => {
+      const parts = String(r.display_name || "").split(", ");
+      return { name: r.name || parts[0] || "Place", lat: parseFloat(r.lat), lon: parseFloat(r.lon), sub: parts.slice(1, 4).join(", ") };
+    });
+  }
+  async function getJSON(u, signal) { const r = await fetch(u, { signal }); return r.json(); }
+  async function search(v, deep) {
     if (ctl) ctl.abort(); ctl = new AbortController();
-    const bias = M.pos ? "&lat=" + M.pos[0] + "&lon=" + M.pos[1] : "";
+    const sg = ctl.signal;
+    const jobs = [getJSON("https://photon.komoot.io/api/?q=" + encodeURIComponent(v) + "&limit=6&lang=en&bbox=" + INDIA + near(), sg).then(fromPhoton)];
+    // pressing Enter also asks Nominatim, which knows more small localities in India
+    if (deep) jobs.push(getJSON("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=in&limit=6&q=" + encodeURIComponent(v), sg).then(fromNominatim));
     try {
-      const r = await fetch("https://photon.komoot.io/api/?q=" + encodeURIComponent(v) + "&limit=6&lang=en" + bias, { signal: ctl.signal });
-      found = (await r.json()).features || [];
-      if (!found.length) { note("No places found. Try a landmark or a city name."); return; }
-      res.innerHTML = found.map((f, i) => {
-        const p = f.properties || {}, name = p.name || p.street || p.city || "Place";
-        const sub = [p.name && p.street ? p.street : null, p.district, p.city || p.county, p.state, p.country].filter(Boolean).join(", ");
-        return `<button data-i="${i}"><b>${esc(name)}</b><small>${esc(sub)}</small></button>`;
-      }).join("");
-      res.hidden = false;
-      res.querySelectorAll("button").forEach(b => b.onclick = () => {
-        const f = found[+b.dataset.i], p = f.properties || {};
-        setDest({ name: p.name || p.street || "Destination", lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
-      });
+      const all = (await Promise.allSettled(jobs)).flatMap(r => r.status === "fulfilled" ? r.value : []);
+      if (sg.aborted) return;
+      const seen = new Set(); found = all.filter(x => { const k = x.lat.toFixed(3) + "," + x.lon.toFixed(3); if (seen.has(k) || isNaN(x.lat)) return false; seen.add(k); return true; });
+      if (!found.length) { note(jobs.length && all.length === 0 ? "No places found in India. Try a landmark, area or city name." : "No places found."); return; }
+      showResults();
     } catch (e) { if (e.name !== "AbortError") note("Search needs internet. Check your connection and try again."); }
   }
-  function setDest(d) {
-    M.dest = d; M.nav = null; M.navInfo = null; q.value = d.name; xb.hidden = false; res.hidden = true; q.blur();
-    M.follow = false; M.view = null; renderDest(); routeTo();
+  function showResults() {
+    const mine = active === "from" ? '<button data-i="-1"><b>My location</b><small>Use GPS as the start</small></button>' : "";
+    res.innerHTML = mine + found.map((f, i) => `<button data-i="${i}"><b>${esc(f.name)}</b><small>${esc(f.sub)}</small></button>`).join("");
+    res.hidden = false;
+    res.querySelectorAll("button").forEach(b => b.onclick = () => choose(+b.dataset.i));
   }
+  function choose(i) {
+    res.hidden = true; document.activeElement && document.activeElement.blur();
+    if (active === "from") {
+      M.from = i < 0 ? null : found[i]; qf.value = M.from ? M.from.name : "";
+    } else {
+      M.dest = found[i]; q.value = M.dest.name; xb.hidden = false;
+    }
+    M.nav = null; M.navInfo = null; M.follow = false; M.view = null; renderDest();
+    if (M.dest) routeTo(); else sched();
+  }
+  function bind(inp, which) {
+    inp.addEventListener("focus", () => { active = which; if (which === "from" && !inp.value.trim()) { found = []; showResults(); } });
+    inp.addEventListener("input", () => {
+      active = which; if (which === "to") xb.hidden = !inp.value;
+      clearTimeout(timer); const v = inp.value.trim();
+      if (v.length < 3) { if (which === "from") { found = []; showResults(); } else res.hidden = true; return; }
+      timer = setTimeout(() => search(v, false), 450);
+    });
+  }
+  bind(q, "to"); bind(qf, "from");
+  el("m-form").addEventListener("submit", e => {
+    e.preventDefault(); clearTimeout(timer);
+    const inp = active === "from" ? qf : q, v = inp.value.trim();
+    if (v.length >= 2) search(v, true); inp.blur();
+  });
+  xb.onclick = () => { q.value = ""; xb.hidden = true; res.hidden = true; clearDest(); };
+  el("m-swap").onclick = () => {
+    const here = M.pos ? { name: "My location", lat: M.pos[0], lon: M.pos[1] } : null;
+    const a = M.from || here, b = M.dest; if (!b && !M.from) return;
+    M.dest = a; M.from = b && b.name === "My location" ? null : b;
+    q.value = M.dest ? M.dest.name : ""; qf.value = M.from ? M.from.name : ""; xb.hidden = !q.value;
+    M.nav = null; M.navInfo = null; renderDest(); if (M.dest) routeTo(); else sched();
+  };
   function clearDest() { M.dest = null; M.nav = null; M.navInfo = null; M.needRoute = false; renderDest(); sched(); }
+  const startPt = () => M.from ? [M.from.lat, M.from.lon] : M.pos;
   async function routeTo() {
-    const d = M.dest; if (!d || routing) return;
-    if (!M.pos) { M.needRoute = true; center(d.lat, d.lon); M.z = 13; oneShot(); renderDest(); return; }
+    const d = M.dest, st = startPt(); if (!d || routing) return;
+    if (!st) { M.needRoute = true; center(d.lat, d.lon); M.z = 13; oneShot(); renderDest(); return; }
     M.needRoute = false; routing = true; renderDest();
     try {
-      const u = `https://router.project-osrm.org/route/v1/driving/${M.pos[1]},${M.pos[0]};${d.lon},${d.lat}?overview=full&geometries=geojson`;
+      const u = `https://router.project-osrm.org/route/v1/driving/${st[1]},${st[0]};${d.lon},${d.lat}?overview=full&geometries=geojson`;
       const j = await (await fetch(u)).json();
       if (j.code !== "Ok" || !j.routes.length) throw new Error("no route");
       const r = j.routes[0];
       M.nav = r.geometry.coordinates.map(c => [c[1], c[0]]); M.navInfo = { km: r.distance / 1000, min: r.duration / 60 };
     } catch (e) { M.nav = null; M.navInfo = { err: true }; }
     routing = false; renderDest(); sched();
-    if (M.nav) fit(M.nav.concat([M.pos]));
+    if (M.nav) fit(M.nav);
   }
   function renderDest() {
     const box = el("m-dest"); box.hidden = !M.dest; if (!M.dest) return;
     const i = M.navInfo;
     const meta = i && i.err ? "Could not plan a route. Check your internet." : i ? `${i.km.toFixed(1)} km · about ${fmtT(i.min)} by road` :
       M.needRoute ? "Waiting for GPS to plan the route…" : "Planning route…";
-    box.innerHTML = `<div class="dd"><b>${esc(M.dest.name)}</b><span class="meta">${esc(meta)}</span></div>` +
+    box.innerHTML = `<div class="dd"><b>${esc((M.from ? M.from.name : "My location") + " → " + M.dest.name)}</b><span class="meta">${esc(meta)}</span></div>` +
       `<button class="mini" id="d-re">Update</button><button class="mini" id="d-x">Clear</button>`;
     el("d-re").onclick = () => { M.nav = null; M.navInfo = null; routing = false; renderDest(); routeTo(); };
-    el("d-x").onclick = () => { q.value = ""; xb.hidden = true; clearDest(); };
+    el("d-x").onclick = () => { q.value = ""; qf.value = ""; M.from = null; xb.hidden = true; clearDest(); };
   }
 
   /* ---------- text ---------- */

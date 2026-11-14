@@ -230,6 +230,14 @@ body.light table td,body.light table th{border-color:#dde2e8}
 button.mini{padding:8px 12px;border-radius:12px;border:1px solid var(--hair);background:none;color:var(--tx);font:inherit;font-size:13px}
 .destpin{width:18px;height:18px;border-radius:50%;background:#ff5a5a;border:3px solid #fff;box-shadow:0 0 0 6px #ff5a5a44}
 .msearch input::-webkit-search-cancel-button,.msearch input::-webkit-search-decoration{-webkit-appearance:none;display:none}
+.msearch{flex-direction:column;align-items:stretch;gap:0;height:auto;padding:2px 56px 2px 16px}
+.mrow{display:flex;align-items:center;gap:12px;height:46px}
+.mrow+.mrow{border-top:1px solid var(--hair)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}.dot.g{background:#2fe06b;box-shadow:0 0 0 4px #2fe06b33}.dot.r{background:#ff5a5a;box-shadow:0 0 0 4px #ff5a5a33}
+#m-swap{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:12px;border:1px solid var(--hair);background:none;color:var(--mut);display:grid;place-items:center;padding:0}
+#m-swap svg{stroke:currentColor;width:18px;height:18px}
+.mres{top:124px}
+.frompin{width:16px;height:16px;border-radius:50%;background:#2fe06b;border:3px solid #fff;box-shadow:0 0 0 6px #2fe06b44}
 </style>
 </head>
 <body>
@@ -242,7 +250,6 @@ button.mini{padding:8px 12px;border-radius:12px;border:1px solid var(--hair);bac
 <main>
 
 <section id="s-dash" class="a">
-  <div class="clock"><div><b id="clk-t">--:--</b><span id="clk-s"></span></div><small id="clk-d"></small></div>
   <button class="b g" id="hConn" style="width:100%;padding:14px;margin-bottom:10px;font-size:16px">Pair scooter (one time)</button>
   <div class="pills" id="pills"><button data-m="Auto">Auto</button><button data-m="Eco">Eco</button><button data-m="Normal">Normal</button><button data-m="Sport">Sport</button></div>
   <div class="card bike"><div class="bk-h"><b>Komaki X1</b><span class="chip" id="sc-st">Not connected</span></div>
@@ -344,7 +351,11 @@ button.mini{padding:8px 12px;border-radius:12px;border:1px solid var(--hair);bac
   <div class="card mapcard" id="mapcard">
     <canvas id="gmap" width="600" height="660"></canvas>
     <div id="mlmap"></div>
-    <form class="msearch" id="m-form" autocomplete="off" role="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="m-q" type="search" placeholder="Where do you want to go?" enterkeyhint="search" aria-label="Search a place"><button type="button" id="m-x" hidden aria-label="Clear search"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></form>
+    <form class="msearch" id="m-form" autocomplete="off" role="search">
+      <div class="mrow"><span class="dot g"></span><input id="m-from" type="search" placeholder="From: My location" enterkeyhint="search" aria-label="Start place"></div>
+      <div class="mrow"><span class="dot r"></span><input id="m-q" type="search" placeholder="To: where do you want to go?" enterkeyhint="search" aria-label="Destination"><button type="button" id="m-x" hidden aria-label="Clear destination"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <button type="button" id="m-swap" aria-label="Swap start and destination"><svg viewBox="0 0 24 24"><path d="M8 4v16M8 4L4.5 7.5M8 4l3.5 3.5M16 20V4M16 20l-3.5-3.5M16 20l3.5-3.5"/></svg></button>
+    </form>
     <div class="mres" id="m-res" hidden></div>
     <div class="mspd"><b id="m-spd">0</b><small>km/h</small></div>
     <div class="mctl">
