@@ -252,20 +252,25 @@
       return { name: r.name || parts[0] || "Place", lat: parseFloat(r.lat), lon: parseFloat(r.lon), sub: parts.slice(1, 4).join(", ") };
     });
   }
-  async function getJSON(u, signal) { const r = await fetch(u, { signal }); return r.json(); }
+  // Requests go through the app (proper User-Agent, no browser CORS limits). Plain fetch is only a fallback for desktop testing.
+  const net = url => window.androidHttp ? window.androidHttp(url) :
+    fetch(url).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+  let seq = 0;
   async function search(v, deep) {
-    if (ctl) ctl.abort(); ctl = new AbortController();
-    const sg = ctl.signal;
-    const jobs = [getJSON("https://photon.komoot.io/api/?q=" + encodeURIComponent(v) + "&limit=6&lang=en&bbox=" + INDIA + near(), sg).then(fromPhoton)];
-    // pressing Enter also asks Nominatim, which knows more small localities in India
-    if (deep) jobs.push(getJSON("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=in&limit=6&q=" + encodeURIComponent(v), sg).then(fromNominatim));
-    try {
-      const all = (await Promise.allSettled(jobs)).flatMap(r => r.status === "fulfilled" ? r.value : []);
-      if (sg.aborted) return;
-      const seen = new Set(); found = all.filter(x => { const k = x.lat.toFixed(3) + "," + x.lon.toFixed(3); if (seen.has(k) || isNaN(x.lat)) return false; seen.add(k); return true; });
-      if (!found.length) { note(jobs.length && all.length === 0 ? "No places found in India. Try a landmark, area or city name." : "No places found."); return; }
-      showResults();
-    } catch (e) { if (e.name !== "AbortError") note("Search needs internet. Check your connection and try again."); }
+    const my = ++seq; note("Searching…");
+    const photon = () => net("https://photon.komoot.io/api/?q=" + encodeURIComponent(v) + "&limit=6&lang=en&bbox=" + INDIA + near()).then(fromPhoton);
+    const nomi = () => net("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=in&limit=6&q=" + encodeURIComponent(v)).then(fromNominatim);
+    const run = async f => { try { return { ok: true, v: await f() }; } catch (e) { return { ok: false, e }; } };
+    // Enter asks both services; typing asks Photon first and falls back to Nominatim
+    let rs = deep ? await Promise.all([run(nomi), run(photon)]) : [await run(photon)];
+    if (!deep && (!rs[0].ok || !rs[0].v.length)) rs.push(await run(nomi));
+    if (my !== seq) return;
+    const all = rs.flatMap(r => r.ok ? r.v : []), err = rs.filter(r => !r.ok).map(r => r.e && r.e.message).filter(Boolean)[0];
+    const seen = new Set();
+    found = all.filter(x => { if (isNaN(x.lat) || isNaN(x.lon)) return false; const k = x.lat.toFixed(3) + "," + x.lon.toFixed(3); if (seen.has(k)) return false; seen.add(k); return true; });
+    if (found.length) { showResults(); return; }
+    if (err && rs.every(r => !r.ok)) note("Search failed: " + esc(err) + ". Check your internet and try again.");
+    else note("No places found in India. Try a landmark, area or city name.");
   }
   function showResults() {
     if (!found.length && active === "to") { res.hidden = true; return; }
@@ -343,7 +348,7 @@
     M.needRoute = false; routing = true; renderDest();
     try {
       const u = `https://router.project-osrm.org/route/v1/driving/${st[1]},${st[0]};${d.lon},${d.lat}?overview=full&geometries=geojson&steps=true`;
-      const j = await (await fetch(u)).json();
+      const j = await net(u);
       if (j.code !== "Ok" || !j.routes.length) throw new Error("no route");
       prepRoute(j.routes[0]);
     } catch (e) { M.nav = null; M.steps = null; M.navInfo = { err: true }; }

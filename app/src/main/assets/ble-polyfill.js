@@ -27,6 +27,8 @@
     e.name = i > 0 ? payload.slice(0, i) : "NetworkError"; p.rej(e);
   };
 
+  window.androidHttp = url => call("http", { url }); // HTTPS GET through the app, resolves to parsed JSON
+
   const devs = {}, chars = {};
   const getDev = i => devs[i.id] || (devs[i.id] = new Device(i));
 

@@ -119,6 +119,7 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
                 arr.put(JSONObject().put("id", addr).put("name", prefs.getString("name", "")))
             arr.toString()
         }
+        "http" -> httpGet(a.getString("url"))
         "connect" -> { ensureReady(); connect(a.getString("id")); null }
         "disconnect" -> { links[a.getString("id")]?.gatt?.disconnect(); null }
         "getService" -> {
@@ -156,6 +157,26 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
             null
         }
         else -> throw Err("NotSupportedError", "Unknown method $method")
+    }
+
+    private val allowedHosts = setOf("photon.komoot.io", "nominatim.openstreetmap.org", "router.project-osrm.org")
+
+    /** HTTPS GET for place search and routing, with an app User-Agent as the OpenStreetMap services require. */
+    private suspend fun httpGet(url: String): String = withContext(Dispatchers.IO) {
+        val u = java.net.URL(url)
+        if (u.protocol != "https" || u.host !in allowedHosts) throw Err("SecurityError", "Host not allowed")
+        val c = u.openConnection() as java.net.HttpURLConnection
+        try {
+            c.connectTimeout = 10_000; c.readTimeout = 20_000
+            c.setRequestProperty("User-Agent", "KomakiX1RangePro/1.0 (Android scooter range app)")
+            c.setRequestProperty("Accept", "application/json")
+            c.setRequestProperty("Accept-Language", "en-IN,en")
+            val code = c.responseCode
+            if (code !in 200..299) throw Err("NetworkError", "HTTP $code")
+            c.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            c.disconnect()
+        }
     }
 
     private fun reply(id: Int, ok: Boolean, payload: String) {
