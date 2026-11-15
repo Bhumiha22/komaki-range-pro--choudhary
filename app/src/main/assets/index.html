@@ -258,6 +258,7 @@ button.mini.end{flex:1;color:#ff5a5a;border-color:#ff5a5a66;padding:11px 14px;fo
 .homepin svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .mapcard.picking #mlmap,.mapcard.picking #gmap{cursor:crosshair}
 .mapcard.picking{outline:2px solid #6c5ce7}
+.stale #d-soc,.stale #d-rng,.stale .gauge svg{opacity:.55}
 </style>
 </head>
 <body>
@@ -323,7 +324,7 @@ button.mini.end{flex:1;color:#ff5a5a;border-color:#ff5a5a66;padding:11px 14px;fo
     <label class="opt"><span>Auto ride<small>Starts when the scooter uses power, stops after 3 min idle</small></span><input type="checkbox" id="autoR"></label></div></details>
   <details class="card cat"><summary><span class="ic"><svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 4V3l5 4L7 17"/></svg></span><span>Connection<small>Bluetooth link to the scooter</small></span></summary><div class="body">
     <label class="opt"><span>Auto-reconnect<small>Connect again by itself when the link drops</small></span><input type="checkbox" id="auto" checked></label>
-    <label class="opt"><span>Live updates<small>Refresh battery data every 2 seconds</small></span><input type="checkbox" id="poll"></label>
+    <label class="opt"><span>Live updates<small>Refresh battery data every second</small></span><input type="checkbox" id="poll"></label>
     <div class="row" style="margin:8px 0 0"><button class="b g" id="bConn">Connect</button><button class="b r" id="bDis" disabled>Disconnect</button></div></div></details>
   <details class="card cat"><summary><span class="ic"><svg viewBox="0 0 24 24"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg></span><span>Advanced<small>For testing and troubleshooting</small></span></summary><div class="body">
     <label class="opt"><span>Simulation mode<small>Fake data, not from your scooter</small></span><input type="checkbox" id="simT"></label>
@@ -455,7 +456,7 @@ async function autoTry(){
   if(!S.dev){status("Tap Connect once to pair your scooter");return}connecting=true;
   try{await attach()}catch(e){status("Waiting for scooter…")}
   connecting=false}
-setInterval(autoTry,4000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)autoTry()});setTimeout(autoTry,600);
+setInterval(autoTry,2000);document.addEventListener("visibilitychange",()=>{if(!document.hidden)autoTry()});setTimeout(autoTry,50);
 function status(t,c){const e=$("#st");e.textContent=t;e.className="st "+(c||"")}
 async function bleConnect(){
   if(!navigator.bluetooth){status("Web Bluetooth not supported here","bad");alert("Use Chrome on Android over HTTPS or localhost.");return}
@@ -470,15 +471,14 @@ async function attach(){
   const srv=await S.dev.gatt.connect();
   // Discover by UUID (handles 0x0011, 0x0012, 0x0015, 0x0019 are only observations)
   const svc=await srv.getPrimaryService(U.svc);
-  S.rxC=await svc.getCharacteristic(U.rx);
-  S.txC=await svc.getCharacteristic(U.tx).catch(()=>null);
-  S.cuC=null;
-  try{S.cuC=await (await srv.getPrimaryService(U.csvc)).getCharacteristic(U.cch)}catch(e){}
+  const [rx,tx,cu]=await Promise.all([svc.getCharacteristic(U.rx),svc.getCharacteristic(U.tx).catch(()=>null),
+    srv.getPrimaryService(U.csvc).then(s=>s.getCharacteristic(U.cch)).catch(()=>null)]);
+  S.rxC=rx;S.txC=tx;S.cuC=cu;
   // Subscribing writes CCCD 0x0002902 = 01 00 under the hood
   S.rxC.addEventListener("characteristicvaluechanged",ev=>addPacket(Array.from(new Uint8Array(ev.target.value.buffer)),"rx"));
   await S.rxC.startNotifications();
+  S.ble=true;S.tries=0;pollStart();status("Connected: "+(S.dev.name||"scooter"),"on"); // first request goes out straight away
   if(S.rxC.properties.read){try{addPacket(Array.from(new Uint8Array((await S.rxC.readValue()).buffer)),"rx")}catch(e){}}
-  S.ble=true;S.tries=0;pollStart();status("Connected: "+(S.dev.name||"scooter"),"on");
   $("#bConn").disabled=true;$("#bDis").disabled=false;
   $("#disc").textContent=["Service FF00: found","FF01 (notify): "+(S.rxC?"found":"missing"),"FF02 (write): "+(S.txC?"found":"missing"),
     "Custom 2B12 (write): "+(S.cuC?"found":"not found")].join("\n");
@@ -528,7 +528,7 @@ async function pollTick(){
   if(busy||!S.ble||!S.txC)return;busy=true;
   try{await jbdWrite(3);if(pollN++%5===0){await new Promise(r=>setTimeout(r,300));await jbdWrite(4)}}catch(e){}
   busy=false}
-function pollStart(){pollStop();if(!$("#poll").checked||!S.txC)return;pollTick();pollT=setInterval(pollTick,2000);
+function pollStart(){pollStop();if(!$("#poll").checked||!S.txC)return;pollTick();pollT=setInterval(pollTick,1000);
   try{navigator.wakeLock&&navigator.wakeLock.request("screen").then(w=>wake=w).catch(()=>{})}catch(e){}}
 function pollStop(){clearInterval(pollT);pollT=null;try{wake&&wake.release()}catch(e){}wake=null}
 $("#poll").checked=LS.get("poll",true);
@@ -556,7 +556,10 @@ $("#bClr").onclick=()=>{S.real.length=0;S.sim.length=0;render()};
 /* ======================= JBD CANDIDATE DECODER ======================= */
 // Public JBD frame: DD cmd status len data... chkHi chkLo 77. Checksum = 0x10000 - sum(status,len,data).
 // BLE notifications arrive in ~20-byte pieces, so bytes are buffered until a whole frame is present.
-const J={buf:[],info:null,cells:null,bad:0,ok:LS.get("jbdok",false)};
+const J={buf:[],info:null,cells:null,bad:0,ok:LS.get("jbdok",false),cache:LS.get("lastInfo",null)};
+let cacheT=0;function cacheInfo(){const n=Date.now();if(n-cacheT<3000)return;cacheT=n;const i=J.info;LS.set("lastInfo",{soc:i.soc,volt:i.volt,temp:i.temps[0],t:n});J.cache=null}
+const ago=t=>{const m=Math.round((Date.now()-t)/6e4);return m<1?"just now":m<60?m+" min ago":m<1440?Math.round(m/60)+" h ago":Math.round(m/1440)+" d ago"};
+const LAST=LS.get("lastInfo",null);
 const PROT=["Cell overvoltage","Cell undervoltage","Pack overvoltage","Pack undervoltage","Charge over-temp","Charge under-temp","Discharge over-temp","Discharge under-temp","Charge overcurrent","Discharge overcurrent","Short circuit","Front-end IC error","MOSFET locked"];
 function jbdFeed(b){
   J.buf.push(...b);
@@ -575,7 +578,7 @@ function jbdFeed(b){
       const now=Date.now(),prev=J.info&&J.info.t;
       J.info={volt:u(0)/100,cur:sg(2)/100,rem:u(4)/100,nom:u(6)/100,cyc:u(8),prot:u(16),soc:d[19],cellsN:d[21],temps:t,t:now};
       if(R.on&&prev&&J.info.cur<0)R.wh+=J.info.volt*-J.info.cur*Math.min(now-prev,5000)/36e5;
-      if(!J.ok){J.ok=true;LS.set("jbdok",true)}chgUpdate(J.info,prev||now);autoPower(J.info)}
+      if(!J.ok){J.ok=true;LS.set("jbdok",true)}cacheInfo();chgUpdate(J.info,prev||now);autoPower(J.info)}
     else if(f[1]===4){const c=[];for(let k=0;k+1<len;k+=2)c.push(u(k));J.cells=c}
   }
 }
@@ -651,7 +654,8 @@ function raw(k,b){const m=mp()[k];if(!m||m.off===""||m.off==null||m.off+m.len>b.
   if(m.sg&&v>=Math.pow(2,8*m.len-1))v-=Math.pow(2,8*m.len);return v*m.sc+m.ad}
 function decode(k,b){return raw(k,b)}
 const fmt=(v,d)=>v==null?"N/A":(+v).toFixed(d==null?1:d);
-function latest(k){if(!S.sim_on&&J.info){const m={soc:J.info.soc,volt:J.info.volt,cur:J.info.cur,temp:J.info.temps[0]};if(m[k]!=null)return m[k]}
+function latest(k){if(!S.sim_on&&!J.info&&LAST&&(k==="soc"||k==="volt"||k==="temp")&&LAST[k]!=null)return LAST[k]; // show the last known value at once while connecting
+  if(!S.sim_on&&J.info){const m={soc:J.info.soc,volt:J.info.volt,cur:J.info.cur,temp:J.info.temps[0]};if(m[k]!=null)return m[k]}
   const a=pk();for(let i=a.length-1;i>=0;i--){const v=raw(k,a[i].b);if(v!=null)return v}return null}
 
 /* ======================= SIMULATION ======================= */
@@ -727,10 +731,10 @@ function renderDash(){
   $("#d-soc").innerHTML=soc==null?'<span class="na">N/A</span>':Math.round(soc)+"%";
   $("#arc").style.strokeDashoffset=soc==null?553:553*(1-Math.max(0,Math.min(100,soc))/100);
   const e0=chgEta(),isChg=I!=null&&Math.abs(I)>.2&&((I>0)===cp)&&!(window.gpsMoving&&window.gpsMoving());
-  $("#d-ct").innerHTML=I==null?(S.ble?"Waiting for data…":"Connect to see charging"):isChg?(e0==null?'<span class="chg">Charging</span>':e0<1?"Fully charged":'<span class="chg">'+fmtMin(e0)+' to full</span>'):Math.abs(I)<=.2?"Not charging":"Discharging";
+  $("#d-ct").innerHTML=I==null?(S.ble?"Waiting for data…":LAST&&!S.sim_on?"Last seen "+ago(LAST.t):"Connect to see charging"):isChg?(e0==null?'<span class="chg">Charging</span>':e0<1?"Fully charged":'<span class="chg">'+fmtMin(e0)+' to full</span>'):Math.abs(I)<=.2?"Not charging":"Discharging";
   $("#sc-bat").setAttribute("width",(soc==null?0:Math.max(0,Math.min(100,soc))*.8).toFixed(1));
   $("#sc-st").textContent=R.on?"Riding":isChg?"Charging":S.ble?"Ready":"Not connected";
-  document.body.classList.toggle("riding",!!R.on);document.body.classList.toggle("charging",!!isChg);
+  document.body.classList.toggle("stale",!J.info&&!!LAST&&!S.sim_on);document.body.classList.toggle("riding",!!R.on);document.body.classList.toggle("charging",!!isChg);
   const ver=k=>{if(!S.sim_on&&J.info&&["soc","volt","cur","temp"].includes(k))return J.ok?"":'<div class="note">JBD decode, unverified</div>';const m=mp()[k];return m&&m.off!==""&&m.off!=null&&!m.ok&&!S.sim_on?'<div class="note">unverified mapping</div>':""};
   const kp=kmPerPct(),card=(k,v,u,extra)=>`<div class="card"><div class="k">${k}</div><div class="v">${v==null?'<span class="na">N/A</span>':v+" <small>"+u+"</small>"}</div>${extra||""}</div>`;
   const P=V!=null&&I!=null?V*Math.abs(I):null,E=S.cap&&soc!=null?S.cap*soc/100:null;
@@ -745,7 +749,7 @@ function renderDash(){
   let rng=null,src="Waiting for battery level.";
   if(soc!=null){rng=soc/100*base100/f;
     src=S.mode+" mode, "+base100.toFixed(0)+" km at 100%. "+(dis&&P>30?"Using "+Math.round(P)+" W now ("+(f>1.05?"range dropping":f<.95?"range rising":"normal use")+").":"Range changes as you use power.")}
-  window.pushWidget&&window.pushWidget(soc,rng,isChg,e0);$("#d-rng").innerHTML=rng==null?'<span class="na">N/A</span>':rng.toFixed(0)+" <small>km</small>";$("#d-rsrc").textContent=src;$("#sc-rng").textContent=rng==null?"--":rng.toFixed(0);
+  J.info&&window.pushWidget&&window.pushWidget(soc,rng,isChg,e0);$("#d-rng").innerHTML=rng==null?'<span class="na">N/A</span>':rng.toFixed(0)+" <small>km</small>";$("#d-rsrc").textContent=src;$("#sc-rng").textContent=rng==null?"--":rng.toFixed(0);
   $("#dRide").textContent=R.on?"Stop and save ride":"Start ride manually";$("#dRide").className="b "+(R.on?"r":"g");
   $("#d-grid").innerHTML+=card("Trip energy",R.on&&R.wh?R.wh.toFixed(0):null,"Wh");
   const eta=chgEta(),live=C.on&&!S.sim_on;
@@ -763,7 +767,7 @@ function renderDash(){
 let mapBuilt=false;
 let rT=0,rQ=null;
 function render(force){if(force){doRender(true);return}if(rQ)return;
-  rQ=setTimeout(()=>{rQ=null;rT=performance.now();if(!document.hidden)doRender()},Math.max(0,250-(performance.now()-rT)))}
+  rQ=setTimeout(()=>{rQ=null;rT=performance.now();if(!document.hidden)doRender()},Math.max(0,100-(performance.now()-rT)))}
 setInterval(()=>{if(R.on&&!document.hidden)render()},1000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)render()});
 function doRender(force){const a=document.querySelector("section.a").id;if(force)mapBuilt=false;

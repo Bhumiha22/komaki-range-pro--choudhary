@@ -306,6 +306,7 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             gatt = g
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH) // short connection interval = faster data
                 g.discoverServices()
             } else {
                 val wasUp = up
@@ -318,10 +319,14 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
             }
         }
 
+        private fun finish() { if (!ready.isCompleted) { up = true; ready.complete(Unit) } }
+
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) = finish()
+
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                up = true
-                ready.complete(Unit)
+                // A larger MTU lets the scooter send a whole reading in one packet. Do not wait long for it.
+                if (g.requestMtu(247)) scope.launch { delay(1500); finish() } else finish()
             } else {
                 ready.completeExceptionally(Err("NetworkError", "Service discovery failed ($status)"))
                 g.disconnect()
