@@ -30,6 +30,7 @@
   const M = { z: last0 ? 16 : 3.9, lat: last0 ? last0[0] : 22.5, lon: last0 ? last0[1] : 79, follow: true, pos: last0, view: null,
     hd: 0, sat: !!LS.get("mapSat", false), dest: null, from: null, nav: null, navInfo: null, needRoute: false };
   const T = { watch: null, pts: [], km: 0, vmax: 0, sp: 0, lastT: 0, fixT: 0, hist: [] };
+  let navOn = false, navRide = false, stepIdx = 1, said = -1, offCnt = 0, pendingStart = false, navTotal = 0, navCum = [];
   let GL = null, glReady = false, glEver = false, glTried = false, curKind = "", posEl = null, posMk = null, destEl = null, destMk = null, fromEl = null, fromMk = null, routing = false;
   const accent = () => getComputedStyle(document.body).getPropertyValue("--ac").trim() || "#3aa0ff";
   const visible = () => el("s-gps").classList.contains("a");
@@ -267,27 +268,33 @@
     } catch (e) { if (e.name !== "AbortError") note("Search needs internet. Check your connection and try again."); }
   }
   function showResults() {
+    if (!found.length && active === "to") { res.hidden = true; return; }
     const mine = active === "from" ? '<button data-i="-1"><b>My location</b><small>Use GPS as the start</small></button>' : "";
     res.innerHTML = mine + found.map((f, i) => `<button data-i="${i}"><b>${esc(f.name)}</b><small>${esc(f.sub)}</small></button>`).join("");
     res.hidden = false;
     res.querySelectorAll("button").forEach(b => b.onclick = () => choose(+b.dataset.i));
+  }
+  const recents = () => LS.get("recents", []);
+  function remember(d) {
+    const r = recents().filter(x => Math.abs(x.lat - d.lat) + Math.abs(x.lon - d.lon) > 0.0005);
+    r.unshift({ name: d.name, lat: d.lat, lon: d.lon, sub: d.sub || "" }); LS.set("recents", r.slice(0, 8));
   }
   function choose(i) {
     res.hidden = true; document.activeElement && document.activeElement.blur();
     if (active === "from") {
       M.from = i < 0 ? null : found[i]; qf.value = M.from ? M.from.name : "";
     } else {
-      M.dest = found[i]; q.value = M.dest.name; xb.hidden = false;
+      M.dest = found[i]; q.value = M.dest.name; xb.hidden = false; remember(M.dest);
     }
     M.nav = null; M.navInfo = null; M.follow = false; M.view = null; renderDest();
     if (M.dest) routeTo(); else sched();
   }
   function bind(inp, which) {
-    inp.addEventListener("focus", () => { active = which; if (which === "from" && !inp.value.trim()) { found = []; showResults(); } });
+    inp.addEventListener("focus", () => { active = which; if (!inp.value.trim()) { found = recents(); showResults(); } });
     inp.addEventListener("input", () => {
       active = which; if (which === "to") xb.hidden = !inp.value;
       clearTimeout(timer); const v = inp.value.trim();
-      if (v.length < 3) { if (which === "from") { found = []; showResults(); } else res.hidden = true; return; }
+      if (v.length < 3) { if (!v) { found = recents(); showResults(); } else res.hidden = true; return; }
       timer = setTimeout(() => search(v, false), 450);
     });
   }
@@ -305,31 +312,128 @@
     q.value = M.dest ? M.dest.name : ""; qf.value = M.from ? M.from.name : ""; xb.hidden = !q.value;
     M.nav = null; M.navInfo = null; renderDest(); if (M.dest) routeTo(); else sched();
   };
-  function clearDest() { M.dest = null; M.nav = null; M.navInfo = null; M.needRoute = false; renderDest(); sched(); }
+  function clearDest() { stopNav(true); M.dest = null; M.nav = null; M.navInfo = null; M.steps = null; M.needRoute = false; renderDest(); sched(); }
   const startPt = () => M.from ? [M.from.lat, M.from.lon] : M.pos;
+
+  /* ----- route + turn-by-turn instructions ----- */
+  const lc = t => t.charAt(0).toLowerCase() + t.slice(1);
+  const compass = b => ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][Math.round(b / 45) % 8];
+  function describe(st) {
+    const m = st.maneuver || {}, t = m.type, mod = m.modifier || "", on = st.name ? " onto " + st.name : "";
+    if (t === "arrive") return { text: "Arrive at your destination", icon: "arrive" };
+    if (t === "depart") return { text: "Head " + (m.bearing_after != null ? compass(m.bearing_after) : "out") + (st.name ? " on " + st.name : ""), icon: "straight" };
+    if (t === "roundabout" || t === "rotary" || t === "roundabout turn") return { text: "At the roundabout take exit " + (m.exit || "") + on, icon: "roundabout" };
+    if (mod === "uturn") return { text: "Make a U-turn" + on, icon: "uturn" };
+    const dir = mod.includes("left") ? "left" : mod.includes("right") ? "right" : "straight";
+    if (t === "fork") return { text: "Keep " + (dir === "straight" ? "straight" : dir) + on, icon: dir };
+    if (t === "merge") return { text: "Merge" + on, icon: dir };
+    if (t === "on ramp" || t === "off ramp") return { text: "Take the ramp" + on, icon: dir };
+    if (dir === "straight") return { text: "Continue straight" + (st.name ? " on " + st.name : ""), icon: "straight" };
+    return { text: "Turn " + mod + on, icon: dir };
+  }
+  function prepRoute(r) {
+    M.nav = r.geometry.coordinates.map(c => [c[1], c[0]]); M.navInfo = { km: r.distance / 1000, min: r.duration / 60 };
+    M.steps = ((r.legs && r.legs[0] && r.legs[0].steps) || []).map(st => Object.assign({ loc: [st.maneuver.location[1], st.maneuver.location[0]] }, describe(st)));
+    navCum = [0]; for (let k = 1; k < M.nav.length; k++) navCum.push(navCum[k - 1] + hav(M.nav[k - 1], M.nav[k]));
+    navTotal = navCum[navCum.length - 1] || 1; M.steps.forEach(st => { st.at = project(st.loc).along; }); stepIdx = Math.min(1, Math.max(0, M.steps.length - 1)); said = -1;
+  }
   async function routeTo() {
     const d = M.dest, st = startPt(); if (!d || routing) return;
     if (!st) { M.needRoute = true; center(d.lat, d.lon); M.z = 13; oneShot(); renderDest(); return; }
     M.needRoute = false; routing = true; renderDest();
     try {
-      const u = `https://router.project-osrm.org/route/v1/driving/${st[1]},${st[0]};${d.lon},${d.lat}?overview=full&geometries=geojson`;
+      const u = `https://router.project-osrm.org/route/v1/driving/${st[1]},${st[0]};${d.lon},${d.lat}?overview=full&geometries=geojson&steps=true`;
       const j = await (await fetch(u)).json();
       if (j.code !== "Ok" || !j.routes.length) throw new Error("no route");
-      const r = j.routes[0];
-      M.nav = r.geometry.coordinates.map(c => [c[1], c[0]]); M.navInfo = { km: r.distance / 1000, min: r.duration / 60 };
-    } catch (e) { M.nav = null; M.navInfo = { err: true }; }
+      prepRoute(j.routes[0]);
+    } catch (e) { M.nav = null; M.steps = null; M.navInfo = { err: true }; }
     routing = false; renderDest(); sched();
-    if (M.nav) fit(M.nav);
+    if (M.nav && !navOn) fit(M.nav);
+    if (pendingStart && M.nav) { pendingStart = false; startNav(); }
+    if (pendingStart && !M.nav) pendingStart = false;
   }
+
+  /* ----- navigation mode ----- */
+  const canSpeak = "speechSynthesis" in window;
+  let voice = LS.get("navVoice", true);
+  function speak(t) {
+    if (!voice || !canSpeak) return;
+    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "en-IN"; speechSynthesis.speak(u); } catch (e) {}
+  }
+  const ICONS = {
+    straight: "M12 20V5M6 11l6-6 6 6", right: "M5 20v-6a4 4 0 0 1 4-4h10M14 5l5 5-5 5", left: "M19 20v-6a4 4 0 0 0-4-4H5M10 5L5 10l5 5",
+    uturn: "M7 20V9a4 4 0 0 1 8 0v5M11 10l4 4 4-4", roundabout: "M12 20v-4M12 16a4 4 0 1 1 4-4M16 12l-2-3M16 12l3-1",
+    arrive: "M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10zM12 11.5m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"
+  };
+  const dist = m => m < 1000 ? Math.max(10, Math.round(m / 10) * 10) + " m" : (m / 1000).toFixed(1) + " km";
+  function banner(st, d) {
+    el("n-d").textContent = dist(d); el("n-t").textContent = st.text;
+    el("n-ic").innerHTML = '<svg viewBox="0 0 24 24"><path d="' + (ICONS[st.icon] || ICONS.straight) + '"/></svg>';
+  }
+  // nearest point on the route: distance away from it and how far along it we are (metres)
+  function project(ll) {
+    const k = Math.cos(ll[0] * Math.PI / 180), P = M.nav; let best = { off: 1e9, along: 0 };
+    for (let a = 0; a < P.length - 1; a++) {
+      const ax = (P[a][1] - ll[1]) * k * 111320, ay = (P[a][0] - ll[0]) * 111320, bx = (P[a + 1][1] - ll[1]) * k * 111320, by = (P[a + 1][0] - ll[0]) * 111320;
+      const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+      const off = Math.hypot(ax + t * dx, ay + t * dy);
+      if (off < best.off) best = { off, along: navCum[a] + t * Math.sqrt(len2) };
+    }
+    return best;
+  }
+  function startNav() {
+    if (!M.dest) return;
+    if (M.from) { M.from = null; qf.value = ""; M.nav = null; M.navInfo = null; pendingStart = true; renderDest(); routeTo(); return; }
+    if (!M.nav || !M.steps || !M.steps.length) { pendingStart = true; M.nav = null; M.navInfo = null; renderDest(); routeTo(); return; }
+    navOn = true; offCnt = 0; M.follow = true; M.view = null; prepStepsKeep();
+    el("mapcard").classList.add("nav"); el("m-nav").hidden = false; res.hidden = true;
+    navRide = false; if (!R.on) { window.rideStart(false); navRide = true; }
+    live(); speak("Starting navigation. " + M.steps[stepIdx].text);
+    banner(M.steps[stepIdx], M.pos ? hav(M.pos, M.steps[stepIdx].loc) : 0); renderDest(); if (M.pos) navTick(M.pos);
+  }
+  function prepStepsKeep() { stepIdx = Math.min(1, Math.max(0, M.steps.length - 1)); said = -1; }
+  function stopNav(endRide) {
+    const was = navOn; navOn = false; offCnt = 0; pendingStart = false; M.live = null;
+    el("mapcard").classList.remove("nav"); el("m-nav").hidden = true;
+    if (canSpeak) try { speechSynthesis.cancel(); } catch (e) {}
+    if (endRide && navRide && R.on) window.rideStop();
+    navRide = false;
+    if (was && GL && glReady) GL.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+    renderDest();
+  }
+  function arrive() { speak("You have arrived."); stopNav(true); setMsg("You have arrived"); }
+  function navTick(ll) {
+    if (!navOn || !M.nav || M.nav.length < 2 || !M.steps) return;
+    const pr = project(ll), left = Math.max(0, navTotal - pr.along);
+    M.live = { left: left / 1000, min: M.navInfo.min * left / navTotal };
+    if (pr.off > 70) { if (++offCnt >= 3 && !routing) { offCnt = 0; speak("Rerouting."); setMsg("Rerouting…"); M.nav = null; routeTo(); return; } } else offCnt = 0;
+    while (stepIdx < M.steps.length - 1 && (pr.along >= M.steps[stepIdx].at - 8 || hav(ll, M.steps[stepIdx].loc) < 25)) { stepIdx++; said = -1; }
+    const st = M.steps[stepIdx], d = hav(ll, st.loc);
+    banner(st, d);
+    if (d <= 250 && said < 1 && d > 60) { said = 1; speak("In " + dist(d).replace(" m", " metres").replace(" km", " kilometres") + ", " + lc(st.text)); }
+    else if (d <= 45 && said < 2) { said = 2; speak(st.text); }
+    renderDest();
+    if (left < 30 || (stepIdx === M.steps.length - 1 && d < 30)) arrive();
+  }
+  el("n-v").onclick = () => { voice = !voice; LS.set("navVoice", voice); el("n-v").classList.toggle("off", !voice); if (!voice && canSpeak) speechSynthesis.cancel(); };
+  el("n-v").classList.toggle("off", !voice); if (!canSpeak) el("n-v").hidden = true;
+
   function renderDest() {
     const box = el("m-dest"); box.hidden = !M.dest; if (!M.dest) return;
-    const i = M.navInfo;
-    const meta = i && i.err ? "Could not plan a route. Check your internet." : i ? `${i.km.toFixed(1)} km · about ${fmtT(i.min)} by road` :
+    const i = M.navInfo, L = M.live;
+    const meta = navOn && L ? `${L.left.toFixed(1)} km left · ${fmtT(L.min)} · arrive ${new Date(Date.now() + L.min * 6e4).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` :
+      i && i.err ? "Could not plan a route. Check your internet." : i ? `${i.km.toFixed(1)} km · about ${fmtT(i.min)} by road` :
       M.needRoute ? "Waiting for GPS to plan the route…" : "Planning route…";
-    box.innerHTML = `<div class="dd"><b>${esc((M.from ? M.from.name : "My location") + " → " + M.dest.name)}</b><span class="meta">${esc(meta)}</span></div>` +
-      `<button class="mini" id="d-re">Update</button><button class="mini" id="d-x">Clear</button>`;
-    el("d-re").onclick = () => { M.nav = null; M.navInfo = null; routing = false; renderDest(); routeTo(); };
-    el("d-x").onclick = () => { q.value = ""; qf.value = ""; M.from = null; xb.hidden = true; clearDest(); };
+    const btns = navOn ? '<button class="mini end" id="d-end">End ride</button>' :
+      '<button class="go" id="d-go">Start ride</button><button class="mini" id="d-re">Update</button><button class="mini" id="d-x">Clear</button>';
+    box.innerHTML = `<div class="dd"><b>${esc((M.from ? M.from.name : "My location") + " → " + M.dest.name)}</b><span class="meta">${esc(meta)}</span></div><div class="dbtn">${btns}</div>`;
+    const b = id => el(id);
+    if (navOn) b("d-end").onclick = () => stopNav(true);
+    else {
+      b("d-go").onclick = startNav;
+      b("d-re").onclick = () => { M.nav = null; M.navInfo = null; routing = false; renderDest(); routeTo(); };
+      b("d-x").onclick = () => { q.value = ""; qf.value = ""; M.from = null; xb.hidden = true; clearDest(); };
+    }
   }
 
   /* ---------- text ---------- */
@@ -367,6 +471,7 @@
       const dlt = ((c.heading - M.hd + 540) % 360) - 180; M.hd = (M.hd + dlt * 0.35 + 360) % 360;
     }
     if (M.needRoute && M.dest) routeTo();
+    if (navOn) navTick(ll);
     if (GL) sched(); else if (M.follow && !M.view) center(ll[0], ll[1]); else csched();
     setMsg(R.on ? "Recording your route · GPS ±" + Math.round(c.accuracy) + " m" : null);
   }

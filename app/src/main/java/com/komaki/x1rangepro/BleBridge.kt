@@ -61,6 +61,12 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
         }
     }
 
+    /** Latest battery level and range from the page, shown on the home-screen widget. */
+    @JavascriptInterface
+    fun saveStatus(soc: Int, rangeKm: Int, charging: Boolean, etaMin: Int) {
+        StatusWidget.save(act.applicationContext, soc, rangeKm, charging, etaMin)
+    }
+
     @JavascriptInterface
     fun setLightBars(light: Boolean) { act.runOnUiThread { act.setBarsLight(light) } }
 

@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Komaki X1 Range Pro</string>
+    <string name="widget_desc">Battery level and range left</string>
 </resources>
