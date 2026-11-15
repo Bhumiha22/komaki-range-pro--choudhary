@@ -5,10 +5,13 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.webkit.JsResult
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -39,6 +42,22 @@ class MainActivity : AppCompatActivity() {
             isAppearanceLightStatusBars = light; isAppearanceLightNavigationBars = light
         }
     }
+
+    /** Keeps the screen awake while the app is open (switchable in Settings). */
+    fun setKeepOn(on: Boolean) {
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    /** While navigating, the Back button asks the page ("End navigation?") instead of closing the app. */
+    @Volatile var backIntercept = false
+
+    private var fileCb: ValueCallback<Array<Uri>>? = null
+    private val filePicker =
+        registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            fileCb?.onReceiveValue(if (uri != null) arrayOf(uri) else null)
+            fileCb = null
+        }
 
     private var insets = intArrayOf(0, 0, 0, 0) // left, top, right, bottom in CSS px
 
@@ -98,6 +117,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setKeepOn(true) // default: screen stays on while the app is open
         web = WebView(this).apply { setBackgroundColor(Color.BLACK) }
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
@@ -125,6 +145,9 @@ class MainActivity : AppCompatActivity() {
         web.settings.apply {
             javaScriptEnabled = true
             textZoom = 100 // ignore the phone's font-size setting so the layout keeps its proportions
+            setSupportZoom(false) // pinching must zoom the map only, never the whole page
+            builtInZoomControls = false
+            displayZoomControls = false
             domStorageEnabled = true
             allowFileAccess = false
             allowContentAccess = false
@@ -150,6 +173,15 @@ class MainActivity : AppCompatActivity() {
                 requestLocationPermission { ok -> callback.invoke(origin, ok, false) }
             }
 
+            override fun onShowFileChooser(
+                view: WebView, callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams
+            ): Boolean {
+                fileCb?.onReceiveValue(null)
+                fileCb = callback
+                filePicker.launch("*/*") // used by "Restore data"
+                return true
+            }
+
             override fun onJsAlert(view: WebView, url: String?, message: String?, result: JsResult): Boolean {
                 AlertDialog.Builder(this@MainActivity).setMessage(message)
                     .setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }
@@ -171,6 +203,10 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (backIntercept) {
+                    web.evaluateJavascript("window.onBackKey&&window.onBackKey()", null)
+                    return
+                }
                 if (web.canGoBack()) web.goBack() else { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
             }
         })

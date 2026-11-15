@@ -10,11 +10,27 @@ android {
         applicationId = "com.komaki.x1rangepro"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // Every GitHub build gets a higher number, so each APK installs over the previous one.
+        val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+        versionCode = 100 + run
+        versionName = "1.$run"
+    }
+    // One fixed signing key for every build. Without it each GitHub build is signed with a new random key,
+    // Android refuses to update over the old app, and the only way forward is to uninstall (which deletes your data).
+    signingConfigs {
+        create("fixed") {
+            storeFile = file("komaki-debug.keystore")
+            storePassword = "android"
+            keyAlias = "komaki"
+            keyPassword = "android"
+        }
     }
     buildTypes {
-        release { isMinifyEnabled = false }
+        getByName("debug") { signingConfig = signingConfigs.getByName("fixed") }
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("fixed")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

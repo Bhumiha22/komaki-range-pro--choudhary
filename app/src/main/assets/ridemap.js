@@ -31,9 +31,12 @@
   const M = { z: last0 ? 16 : 3.9, lat: last0 ? last0[0] : 22.5, lon: last0 ? last0[1] : 79, follow: true, pos: last0, view: null,
     hd: 0, sat: !!LS.get("mapSat", false), dest: null, from: null, nav: null, navInfo: null, needRoute: false };
   const T = { watch: null, pts: [], km: 0, vmax: 0, sp: 0, lastT: 0, fixT: 0, hist: [] };
-  let navOn = false, navRide = false, stepIdx = 1, said = -1, offCnt = 0, pendingStart = false, navTotal = 0, navCum = [];
+  let navOn = false, navRide = false, stepIdx = 1, said = 0, lastStep = -1, offCnt = 0, pendingStart = false, navTotal = 0, navCum = [];
+  // follow camera (Google-style: heading up, tilted, the arrow sits in the lower part of the screen)
+  const CAM = { on: false, raf: 0, lt: 0, from: null, to: null, cur: null, t0: 0, dur: 1000, b0: 0, b1: 0, bear: 0, pitch: 0, z: 17, zT: 17, zoff: 0, lastFix: 0 };
+  const PITCH = 55;
   let GL = null, glReady = false, glEver = false, glTried = false, curKind = "", posEl = null, posMk = null, destEl = null, destMk = null, fromEl = null, fromMk = null, homeEl = null, homeMk = null, routing = false;
-  let home = LS.get("home", null), pickHome = false;
+  let home = LS.get("home", null), pickHome = false, resumeT = 0, posArrow = false;
   const accent = () => getComputedStyle(document.body).getPropertyValue("--ac").trim() || "#3aa0ff";
   const visible = () => el("s-gps").classList.contains("a");
   const NAVC = "#ffb02e";
@@ -48,6 +51,20 @@
     const r = Math.PI / 180, dLa = (b[0] - a[0]) * r, dLo = (b[1] - a[1]) * r;
     const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLo / 2) ** 2;
     return 12742000 * Math.asin(Math.sqrt(h));
+  };
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const norm360 = a => ((a % 360) + 360) % 360;
+  const dAng = (a, b) => ((b - a + 540) % 360) - 180;           // shortest turn from a to b
+  const bearing = (a, b) => {
+    const r = Math.PI / 180, dl = (b[1] - a[1]) * r;
+    const y = Math.sin(dl) * Math.cos(b[0] * r), x = Math.cos(a[0] * r) * Math.sin(b[0] * r) - Math.sin(a[0] * r) * Math.cos(b[0] * r) * Math.cos(dl);
+    return norm360(Math.atan2(y, x) / r);
+  };
+  // the part of the planned route that is still ahead of you (the part behind is not drawn)
+  const navLine = () => {
+    const P = M.nav || [];
+    if (!navOn || !M.navPos || !P.length) return P;
+    return [M.navPos.pt].concat(P.slice(M.navPos.idx + 1));
   };
 
   /* ---------- flat canvas map (fallback) ---------- */
@@ -84,10 +101,12 @@
     }
     const ac = accent();
     ctx.lineJoin = ctx.lineCap = "round";
-    if (M.nav && M.nav.length > 1) {
-      path(M.nav, z, ox, oy); ctx.setLineDash([2, 10]); ctx.strokeStyle = NAVC; ctx.lineWidth = 5; ctx.stroke(); ctx.setLineDash([]);
+    const ahead = navLine();
+    if (ahead.length > 1) {
+      path(ahead, z, ox, oy); ctx.strokeStyle = "#000000"; ctx.globalAlpha = 0.45; ctx.lineWidth = 11; ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = NAVC; ctx.lineWidth = 6; ctx.stroke();
     }
-    const pts = M.view || (R.on ? T.pts : []);
+    const pts = M.view || []; // only a saved ride is drawn; the ride you are on is recorded, not drawn
     if (pts.length > 1) {
       path(pts, z, ox, oy);
       ctx.strokeStyle = ac; ctx.shadowColor = ac; ctx.shadowBlur = 12; ctx.lineWidth = 5; ctx.stroke();
@@ -116,7 +135,7 @@
       ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fillStyle = ac; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = "#fff"; ctx.stroke();
     }
     ctx.fillStyle = k === "light" ? "#00000099" : "#ffffff80"; ctx.font = "9px Roboto, sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(CREDIT[k], 10, h - 8);
+    ctx.fillText(CREDIT[k], 10, h - (navOn ? 100 : 8)); // above the trip bar while navigating
   }
 
   /* ---------- vector map (MapLibre) ---------- */
@@ -133,8 +152,14 @@
     GL.on("style.load", onStyle);
     GL.on("click", e => { if (pickHome) saveHome(e.lngLat.lat, e.lngLat.lng); });
     GL.on("error", () => { if (!glEver) glFallback(); });
-    GL.on("dragstart", () => { M.follow = false; });
-    GL.on("zoom", () => { M.z = GL.getZoom(); });
+    GL.on("dragstart", () => { M.follow = false; clearTimeout(resumeT); });
+    GL.on("dragend", () => { // while navigating, go back to following you a few seconds after you let go
+      clearTimeout(resumeT); if (navOn) resumeT = setTimeout(() => { if (navOn && !M.follow) live(); }, 8000);
+    });
+    GL.on("zoom", e => {
+      M.z = GL.getZoom();
+      if (CAM.on && e && e.originalEvent) { CAM.z = M.z; CAM.zT = M.z; CAM.zoff = M.z - baseZ(T.sp); } // pinch while following
+    });
     setTimeout(() => { if (!glEver) glFallback(); }, 12000);
   }
   function onStyle() { if (!GL) return; glReady = true; glEver = true; glLayers(); glSync(); }
@@ -146,10 +171,11 @@
   function glLayers() {
     const c = accent(), rnd = { "line-cap": "round", "line-join": "round" };
     if (GL.getSource("route")) return; // layers already there
+    for (const k in sent) delete sent[k];
     try {
       GL.addSource("nav", { type: "geojson", data: emptyFC() });
-      GL.addLayer({ id: "nav-case", type: "line", source: "nav", layout: rnd, paint: { "line-color": "#000000", "line-opacity": 0.35, "line-width": 9 } });
-      GL.addLayer({ id: "nav", type: "line", source: "nav", layout: rnd, paint: { "line-color": NAVC, "line-width": 5, "line-dasharray": [0.4, 1.6] } });
+      GL.addLayer({ id: "nav-case", type: "line", source: "nav", layout: rnd, paint: { "line-color": "#000000", "line-opacity": 0.5, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5, 17, 13] } });
+      GL.addLayer({ id: "nav", type: "line", source: "nav", layout: rnd, paint: { "line-color": NAVC, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 17, 8] } });
       GL.addSource("route", { type: "geojson", data: emptyFC() });
       GL.addLayer({ id: "route-glow", type: "line", source: "route", layout: rnd, paint: { "line-color": c, "line-width": 12, "line-blur": 9, "line-opacity": 0.75 } });
       GL.addLayer({ id: "route-main", type: "line", source: "route", layout: rnd, paint: { "line-color": c, "line-width": 4.5 } });
@@ -158,35 +184,79 @@
       GL.addLayer({ id: "ends", type: "circle", source: "ends", paint: { "circle-radius": 6.5, "circle-color": ["get", "c"], "circle-stroke-width": 2, "circle-stroke-color": "#000000" } });
     } catch (e) {}
     if (!posEl) {
-      posEl = document.createElement("div"); posEl.className = "posdot"; posMk = new maplibregl.Marker({ element: posEl });
+      posEl = document.createElement("div"); posEl.className = "posdot";
+      posMk = new maplibregl.Marker({ element: posEl, rotationAlignment: "map", pitchAlignment: "map" });
       destEl = document.createElement("div"); destEl.className = "destpin"; destMk = new maplibregl.Marker({ element: destEl });
       fromEl = document.createElement("div"); fromEl.className = "frompin"; fromMk = new maplibregl.Marker({ element: fromEl });
       homeEl = document.createElement("div"); homeEl.className = "homepin"; homeEl.innerHTML = HOUSE; homeMk = new maplibregl.Marker({ element: homeEl });
     }
   }
+  const sent = {}, ARROW = '<svg viewBox="0 0 24 24"><path d="M12 2.5L20 21l-8-4.2L4 21z"/></svg>';
+  let lastAc = "";
+  function put(id, sig, data) { if (sent[id] === sig) return; sent[id] = sig; GL.getSource(id).setData(data); }
+  // arrow while you are being followed (riding or navigating), pulsing dot otherwise
+  function setPuck() {
+    if (!posEl) return;
+    const a = chaseOn(); if (a === posArrow) return;
+    posArrow = a; posEl.classList.toggle("posarrow", a); posEl.classList.toggle("posdot", !a); posEl.innerHTML = a ? ARROW : "";
+  }
   function glSync() {
     if (!GL || !glReady || !visible()) return;
-    const c = accent(), pts = M.view || (R.on ? T.pts : []), ll = pts.map(q => [q[1], q[0]]);
-    ["route-glow", "route-main"].forEach(id => GL.setPaintProperty(id, "line-color", c));
+    const c = accent(), pts = M.view || [], ll = pts.map(q => [q[1], q[0]]); // saved rides only; the live trail is not drawn
+    if (c !== lastAc) { lastAc = c; ["route-glow", "route-main"].forEach(id => GL.setPaintProperty(id, "line-color", c)); }
     const line = a => a.length > 1 ? { type: "Feature", geometry: { type: "LineString", coordinates: a } } : emptyFC();
-    GL.getSource("route").setData(line(ll));
-    GL.getSource("nav").setData(line((M.nav || []).map(q => [q[1], q[0]])));
-    GL.getSource("ends").setData(M.view && ll.length > 1 ? { type: "FeatureCollection", features: [
+    put("route", "v" + ll.length + (ll[0] || ""), line(ll));
+    const ahead = navLine();
+    put("nav", ahead.length + ":" + (ahead[0] || ""), line(ahead.map(q => [q[1], q[0]])));
+    put("ends", "e" + ll.length + (ll[0] || ""), M.view && ll.length > 1 ? { type: "FeatureCollection", features: [
       { type: "Feature", properties: { c: "#2fe06b" }, geometry: { type: "Point", coordinates: ll[0] } },
       { type: "Feature", properties: { c: "#ff5a5a" }, geometry: { type: "Point", coordinates: ll[ll.length - 1] } }] } : emptyFC());
-    if (M.pos && !M.view) { posMk.setLngLat([M.pos[1], M.pos[0]]); if (!posEl.isConnected) posMk.addTo(GL); }
-    else if (posEl.isConnected) posMk.remove();
+    if (M.pos && !M.view) {
+      setPuck();
+      if (!posEl.isConnected) { const q0 = M.snap ? M.snap.ll : M.pos; posMk.setLngLat([q0[1], q0[0]]); posMk.addTo(GL); }
+      else if (!chaseOn()) posMk.setLngLat([M.pos[1], M.pos[0]]);
+    } else if (posEl.isConnected) posMk.remove();
     if (M.dest) { destMk.setLngLat([M.dest.lon, M.dest.lat]); if (!destEl.isConnected) destMk.addTo(GL); }
     else if (destEl.isConnected) destMk.remove();
     if (home) { homeMk.setLngLat([home.lon, home.lat]); if (!homeEl.isConnected) homeMk.addTo(GL); }
     else if (homeEl.isConnected) homeMk.remove();
     if (M.from) { fromMk.setLngLat([M.from.lon, M.from.lat]); if (!fromEl.isConnected) fromMk.addTo(GL); }
     else if (fromEl.isConnected) fromMk.remove();
-    if (M.follow && !M.view && M.pos) {
-      const o = { center: [M.pos[1], M.pos[0]], duration: 900, essential: true };
-      if (R.on) { o.zoom = Math.max(GL.getZoom(), 16.5); o.pitch = 50; o.bearing = M.hd; }
-      GL.easeTo(o);
+    if (M.follow && !M.view && M.pos && !chaseOn()) GL.easeTo({ center: [M.pos[1], M.pos[0]], duration: 900, essential: true });
+  }
+
+  /* ---------- Google-style follow camera ---------- */
+  const baseZ = v => v > 45 ? 16.1 : v > 25 ? 16.7 : 17.3;       // zoom out a little when you go faster
+  const clampZ = z => Math.max(12, Math.min(19, z));
+  const chaseOn = () => !!(GL && glReady && M.follow && !M.view && (navOn || R.on));
+  const camPad = () => ({ top: Math.round((el("mlmap").clientHeight || 600) * 0.44), bottom: 0, left: 0, right: 0 }); // arrow sits low on screen
+  function chaseReset() { CAM.on = false; CAM.lastFix = 0; if (CAM.raf) { cancelAnimationFrame(CAM.raf); CAM.raf = 0; } }
+  function camFix(ll, spd) {       // a new GPS fix: glide the camera and arrow there over about a second
+    if (!chaseOn() || !visible()) return;
+    const now = performance.now();
+    if (!CAM.on) {                 // start from wherever the map is now
+      const c = GL.getCenter(); CAM.cur = [c.lat, c.lng]; CAM.bear = GL.getBearing(); CAM.pitch = GL.getPitch(); CAM.z = GL.getZoom(); CAM.on = true; CAM.lastFix = 0;
     }
+    CAM.from = CAM.cur || ll; CAM.to = ll; CAM.t0 = now;
+    CAM.dur = CAM.lastFix ? Math.max(500, Math.min(1800, now - CAM.lastFix)) : 1200; CAM.lastFix = now;
+    CAM.b0 = CAM.bear; CAM.b1 = CAM.bear + dAng(norm360(CAM.bear), M.hd);
+    CAM.zT = clampZ(baseZ(spd) + CAM.zoff);
+    if (posMk) posMk.setRotation(M.hd);
+    if (!CAM.raf) CAM.raf = requestAnimationFrame(camStep);
+  }
+  function camKick() { if (chaseOn() && CAM.on && !CAM.raf) CAM.raf = requestAnimationFrame(camStep); }
+  function camStep(t) {
+    CAM.raf = 0;
+    if (!chaseOn() || !visible()) { CAM.on = false; return; }
+    if (t - CAM.lt < 30) { CAM.raf = requestAnimationFrame(camStep); return; } // about 30 frames a second is plenty
+    CAM.lt = t;
+    const k = Math.min(1, (t - CAM.t0) / CAM.dur);
+    const cur = [lerp(CAM.from[0], CAM.to[0], k), lerp(CAM.from[1], CAM.to[1], k)];
+    CAM.cur = cur; CAM.bear = lerp(CAM.b0, CAM.b1, k);
+    CAM.z += (CAM.zT - CAM.z) * 0.06; CAM.pitch += (PITCH - CAM.pitch) * 0.06;
+    posMk.setLngLat([cur[1], cur[0]]);
+    GL.jumpTo({ center: [cur[1], cur[0]], bearing: norm360(CAM.bear), pitch: CAM.pitch, zoom: CAM.z, padding: camPad() });
+    if (k < 1 || Math.abs(CAM.zT - CAM.z) > 0.02 || Math.abs(PITCH - CAM.pitch) > 0.3) CAM.raf = requestAnimationFrame(camStep);
   }
   // map look follows the app theme and the satellite switch
   function applyKind() {
@@ -221,11 +291,20 @@
   }
   function live() {
     M.view = null; M.follow = true;
-    if (GL && glReady && M.pos) GL.easeTo({ center: [M.pos[1], M.pos[0]], zoom: Math.max(GL.getZoom(), 16), pitch: R.on ? 50 : 0, bearing: R.on ? M.hd : 0, duration: 700 });
-    else if (M.pos) { M.z = Math.max(M.z, 16); center(M.pos[0], M.pos[1]); }
+    if (GL && glReady && M.pos) {
+      if (chaseOn()) { CAM.on = false; camFix(M.snap ? M.snap.ll : M.pos, T.sp); }
+      else GL.easeTo({ center: [M.pos[1], M.pos[0]], zoom: Math.max(GL.getZoom(), 16), pitch: 0, bearing: 0, duration: 700 });
+    } else if (M.pos) { M.z = Math.max(M.z, 16); center(M.pos[0], M.pos[1]); }
     sched(); setMsg(); renderList();
   }
-  const zoom = d => { if (GL) { if (glReady) d > 0 ? GL.zoomIn() : GL.zoomOut(); return; } M.z = Math.max(3, Math.min(19, M.z + d)); csched(); };
+  const zoom = d => {
+    if (GL) {
+      if (!glReady) return;
+      if (chaseOn() && CAM.on) { CAM.zoff = Math.max(-4, Math.min(3, CAM.zoff + d)); CAM.zT = clampZ(baseZ(T.sp) + CAM.zoff); camKick(); return; } // keeps following you
+      d > 0 ? GL.zoomIn() : GL.zoomOut(); return;
+    }
+    M.z = Math.max(3, Math.min(19, M.z + d)); csched();
+  };
   el("m-in").onclick = () => zoom(1); el("m-out").onclick = () => zoom(-1); el("m-loc").onclick = live;
   el("m-sat").classList.toggle("on", M.sat);
   el("m-sat").onclick = () => { M.sat = !M.sat; LS.set("mapSat", M.sat); el("m-sat").classList.toggle("on", M.sat); applyKind(); };
@@ -371,112 +450,192 @@
   /* ----- route + turn-by-turn instructions ----- */
   const lc = t => t.charAt(0).toLowerCase() + t.slice(1);
   const compass = b => ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][Math.round(b / 45) % 8];
+  const ordinal = n => ({ 1: "1st", 2: "2nd", 3: "3rd" }[n] || n + "th");
+  // One entry per real manoeuvre. "Continue" and name-change steps are dropped, so the banner and the voice only talk about turns.
   function describe(st) {
-    const m = st.maneuver || {}, t = m.type, mod = m.modifier || "", on = st.name ? " onto " + st.name : "";
-    if (t === "arrive") return { text: "Arrive at your destination", icon: "arrive" };
-    if (t === "depart") return { text: "Head " + (m.bearing_after != null ? compass(m.bearing_after) : "out") + (st.name ? " on " + st.name : ""), icon: "straight" };
-    if (t === "roundabout" || t === "rotary" || t === "roundabout turn") return { text: "At the roundabout take exit " + (m.exit || "") + on, icon: "roundabout" };
-    if (mod === "uturn") return { text: "Make a U-turn" + on, icon: "uturn" };
-    const dir = mod.includes("left") ? "left" : mod.includes("right") ? "right" : "straight";
-    if (t === "fork") return { text: "Keep " + (dir === "straight" ? "straight" : dir) + on, icon: dir };
-    if (t === "merge") return { text: "Merge" + on, icon: dir };
-    if (t === "on ramp" || t === "off ramp") return { text: "Take the ramp" + on, icon: dir };
-    if (dir === "straight") return { text: "Continue straight" + (st.name ? " on " + st.name : ""), icon: "straight" };
-    return { text: "Turn " + mod + on, icon: dir };
+    const m = st.maneuver || {}, t = m.type || "", mod = m.modifier || "", road = st.name || "";
+    const onto = road ? " onto " + road : "", on = road ? " on " + road : "";
+    const side = mod.includes("left") ? "left" : mod.includes("right") ? "right" : "";
+    const slight = mod.startsWith("slight"), sharp = mod.startsWith("sharp");
+    const icon = side ? (slight ? "bear" + side[0] : side) : "straight";
+    if (t === "arrive") return { text: "Arrive at your destination" + (side ? " on your " + side : ""), icon: "arrive" };
+    if (t === "depart") return { text: "Head " + (m.bearing_after != null ? compass(m.bearing_after) : "out") + on, icon: "straight" };
+    if (t === "roundabout" || t === "rotary" || t === "roundabout turn") return { text: "At the roundabout take the " + (m.exit ? ordinal(m.exit) + " exit" : "exit") + onto, icon: "roundabout" };
+    if (t === "exit roundabout" || t === "exit rotary") return null;
+    if (mod === "uturn") return { text: "Make a U-turn" + onto, icon: "uturn" };
+    if (t === "fork") return { text: "Keep " + (side || "straight") + " at the fork" + onto, icon };
+    if (t === "merge") return { text: "Merge" + (side ? " " + side : "") + onto, icon };
+    if (t === "on ramp" || t === "off ramp") return { text: "Take the ramp" + (side ? " on the " + side : "") + onto, icon };
+    if (!side) return null;
+    return { text: (slight ? "Bear " + side : sharp ? "Turn sharp " + side : "Turn " + side) + onto, icon };
   }
   function prepRoute(r) {
     M.nav = r.geometry.coordinates.map(c => [c[1], c[0]]); M.navInfo = { km: r.distance / 1000, min: r.duration / 60 };
-    M.steps = ((r.legs && r.legs[0] && r.legs[0].steps) || []).map(st => Object.assign({ loc: [st.maneuver.location[1], st.maneuver.location[0]] }, describe(st)));
     navCum = [0]; for (let k = 1; k < M.nav.length; k++) navCum.push(navCum[k - 1] + hav(M.nav[k - 1], M.nav[k]));
-    navTotal = navCum[navCum.length - 1] || 1; M.steps.forEach(st => { st.at = project(st.loc).along; }); stepIdx = Math.min(1, Math.max(0, M.steps.length - 1)); said = -1;
+    navTotal = navCum[navCum.length - 1] || 1;
+    const raw = (r.legs && r.legs[0] && r.legs[0].steps) || [];
+    M.steps = raw.map(st => { const o = describe(st); return o && Object.assign({ loc: [st.maneuver.location[1], st.maneuver.location[0]] }, o); }).filter(Boolean);
+    M.steps.forEach(st => { st.at = project(st.loc).along; });
+    if (M.steps.length < 2) M.steps = [{ text: "Follow the route", icon: "straight", loc: M.nav[0], at: 0 }, { text: "Arrive at your destination", icon: "arrive", loc: M.nav[M.nav.length - 1], at: navTotal }];
+    stepIdx = Math.min(1, M.steps.length - 1); said = 0; lastStep = -1; M.navPos = null; M.snap = null;
   }
+  // a fresh GPS fix when the last one is old (the watch is off between rides); falls back to the old fix after 4 s
+  const freshPos = () => new Promise(done => {
+    if (!geo() || Date.now() - T.fixT < 15000) return done();
+    const t = setTimeout(done, 4000);
+    geo().getCurrentPosition(p => { clearTimeout(t); onPos(p); done(); }, () => { clearTimeout(t); done(); }, { enableHighAccuracy: true, timeout: 4000, maximumAge: 0 });
+  });
   async function routeTo() {
-    const d = M.dest, st = startPt(); if (!d || routing) return;
-    if (!st) { M.needRoute = true; center(d.lat, d.lon); M.z = 13; oneShot(); renderDest(); return; }
-    M.needRoute = false; routing = true; renderDest();
+    const d = M.dest; if (!d || routing) return;
+    routing = true; if (!M.from) await freshPos();
+    if (M.dest !== d) { routing = false; return; }
+    const st = startPt();
+    if (!st) { routing = false; M.needRoute = true; center(d.lat, d.lon); M.z = 13; oneShot(); renderDest(); return; }
+    M.needRoute = false; renderDest();
     try {
       const u = `https://router.project-osrm.org/route/v1/driving/${st[1]},${st[0]};${d.lon},${d.lat}?overview=full&geometries=geojson&steps=true`;
       const j = await net(u);
+      if (M.dest !== d) { routing = false; return; } // you picked another place or cleared it while this was loading
       if (j.code !== "Ok" || !j.routes.length) throw new Error("no route");
       prepRoute(j.routes[0]);
     } catch (e) { M.nav = null; M.steps = null; M.navInfo = { err: true }; }
-    routing = false; renderDest(); sched();
+    routing = false; if (M.dest !== d) return; renderDest(); sched();
     if (M.nav && !navOn) fit(M.nav);
     if (pendingStart && M.nav) { pendingStart = false; startNav(); }
     if (pendingStart && !M.nav) pendingStart = false;
   }
 
-  /* ----- navigation mode ----- */
-  const canSpeak = "speechSynthesis" in window;
+  /* ----- voice (the phone's own text-to-speech through the app) ----- */
+  const AB = window.AndroidBle;
+  const nativeSay = !!(AB && AB.speak), canSay = nativeSay || "speechSynthesis" in window;
   let voice = LS.get("navVoice", true);
-  function speak(t) {
-    if (!voice || !canSpeak) return;
-    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "en-IN"; speechSynthesis.speak(u); } catch (e) {}
+  function say(t) {
+    if (!voice || !canSay) return;
+    try {
+      if (nativeSay) AB.speak(t);
+      else { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "en-IN"; speechSynthesis.speak(u); }
+    } catch (e) {}
   }
+  function stopSay() { try { if (nativeSay && AB.stopSpeak) AB.stopSpeak(); else if (canSay) speechSynthesis.cancel(); } catch (e) {} }
+
+  /* ----- navigation mode ----- */
   const ICONS = {
     straight: "M12 20V5M6 11l6-6 6 6", right: "M5 20v-6a4 4 0 0 1 4-4h10M14 5l5 5-5 5", left: "M19 20v-6a4 4 0 0 0-4-4H5M10 5L5 10l5 5",
+    bearl: "M12 20v-8L6 6M11 6H6v5", bearr: "M12 20v-8l6-6M13 6h5v5",
     uturn: "M7 20V9a4 4 0 0 1 8 0v5M11 10l4 4 4-4", roundabout: "M12 20v-4M12 16a4 4 0 1 1 4-4M16 12l-2-3M16 12l3-1",
     arrive: "M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10zM12 11.5m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"
   };
   const dist = m => m < 1000 ? Math.max(10, Math.round(m / 10) * 10) + " m" : (m / 1000).toFixed(1) + " km";
-  function banner(st, d) {
-    el("n-d").textContent = dist(d); el("n-t").textContent = st.text;
+  const distWords = m => {
+    if (m < 150) return Math.max(20, Math.round(m / 10) * 10) + " metres";
+    if (m < 1000) return Math.round(m / 50) * 50 + " metres";
+    const km = (m / 1000).toFixed(1).replace(".0", ""); return km === "1" ? "1 kilometre" : km + " kilometres";
+  };
+  function banner(st, d, nx) {
+    el("n-d").textContent = d < 20 ? "Now" : dist(d); el("n-t").textContent = st.text;
+    el("n-n").textContent = nx ? "Then " + lc(nx.text) : "";
     el("n-ic").innerHTML = '<svg viewBox="0 0 24 24"><path d="' + (ICONS[st.icon] || ICONS.straight) + '"/></svg>';
   }
-  // nearest point on the route: distance away from it and how far along it we are (metres)
+  // nearest point on the route: how far away from it, how far along it (metres), which segment, and the road's direction there
   function project(ll) {
-    const k = Math.cos(ll[0] * Math.PI / 180), P = M.nav; let best = { off: 1e9, along: 0 };
+    const k = Math.cos(ll[0] * Math.PI / 180), P = M.nav; let best = { off: 1e9, along: 0, idx: 0, pt: P[0], hd: 0 };
     for (let a = 0; a < P.length - 1; a++) {
       const ax = (P[a][1] - ll[1]) * k * 111320, ay = (P[a][0] - ll[0]) * 111320, bx = (P[a + 1][1] - ll[1]) * k * 111320, by = (P[a + 1][0] - ll[0]) * 111320;
       const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
       const off = Math.hypot(ax + t * dx, ay + t * dy);
-      if (off < best.off) best = { off, along: navCum[a] + t * Math.sqrt(len2) };
+      if (off < best.off) best = { off, along: navCum[a] + t * Math.sqrt(len2), idx: a, hd: bearing(P[a], P[a + 1]),
+        pt: [P[a][0] + (P[a + 1][0] - P[a][0]) * t, P[a][1] + (P[a + 1][1] - P[a][1]) * t] };
     }
     return best;
+  }
+  function afterLayout() { // the map card changes size when navigation starts or ends
+    requestAnimationFrame(() => { if (GL && glReady) GL.resize(); csched(); });
+    setTimeout(() => { if (GL && glReady) GL.resize(); sched(); }, 350);
   }
   function startNav() {
     if (!M.dest) return;
     if (M.from) { M.from = null; qf.value = ""; M.nav = null; M.navInfo = null; pendingStart = true; renderDest(); routeTo(); return; }
     if (!M.nav || !M.steps || !M.steps.length) { pendingStart = true; M.nav = null; M.navInfo = null; renderDest(); routeTo(); return; }
-    navOn = true; offCnt = 0; M.follow = true; M.view = null; prepStepsKeep();
-    el("mapcard").classList.add("nav"); el("m-nav").hidden = false; res.hidden = true;
+    navOn = true; offCnt = 0; M.follow = true; M.view = null; stepIdx = Math.min(1, M.steps.length - 1); said = 0; lastStep = -1;
+    CAM.zoff = 0; chaseReset();
+    if (document.activeElement) document.activeElement.blur();
+    document.body.classList.add("navfull"); el("mapcard").classList.add("nav"); el("m-nav").hidden = false; el("n-bar").hidden = false; res.hidden = true;
+    try { if (AB && AB.setBackIntercept) AB.setBackIntercept(true); } catch (e) {}
     navRide = false; if (!R.on) { window.rideStart(false); navRide = true; }
-    live(); speak("Starting navigation. " + M.steps[stepIdx].text);
-    banner(M.steps[stepIdx], M.pos ? hav(M.pos, M.steps[stepIdx].loc) : 0); renderDest(); if (M.pos) navTick(M.pos);
+    window.scrollTo(0, 0); afterLayout();
+    let first = "Starting navigation. " + M.steps[stepIdx].text + ".";
+    if (M.pos) {
+      const p0 = project(M.pos); if (p0.off < 60) M.hd = p0.hd;
+      const d0 = Math.max(0, M.steps[stepIdx].at - p0.along);
+      if (d0 > 40 && M.steps[stepIdx].icon !== "arrive") first = "Starting navigation. In " + distWords(d0) + ", " + lc(M.steps[stepIdx].text) + ".";
+      let k0 = 0; while (k0 < 3 && d0 <= TH[k0]) k0++; said = k0; lastStep = stepIdx; // this line already covers the nearer announcements
+    }
+    live();
+    say(first);
+    renderDest(); if (M.pos) navTick(M.pos);
   }
-  function prepStepsKeep() { stepIdx = Math.min(1, Math.max(0, M.steps.length - 1)); said = -1; }
   function stopNav(endRide) {
-    const was = navOn; navOn = false; offCnt = 0; pendingStart = false; M.live = null;
-    el("mapcard").classList.remove("nav"); el("m-nav").hidden = true;
-    if (canSpeak) try { speechSynthesis.cancel(); } catch (e) {}
+    const was = navOn; navOn = false; offCnt = 0; pendingStart = false; M.live = null; M.navPos = null; M.snap = null; clearTimeout(resumeT);
+    document.body.classList.remove("navfull"); el("mapcard").classList.remove("nav"); el("m-nav").hidden = true; el("n-bar").hidden = true;
+    try { if (AB && AB.setBackIntercept) AB.setBackIntercept(false); } catch (e) {}
+    stopSay();
     if (endRide && navRide && R.on) window.rideStop();
-    navRide = false;
-    if (was && GL && glReady) GL.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+    navRide = false; chaseReset();
+    if (was) { afterLayout(); if (GL && glReady && !chaseOn()) GL.easeTo({ pitch: 0, bearing: 0, duration: 600 }); }
     renderDest();
   }
-  function arrive() { speak("You have arrived."); stopNav(true); setMsg("You have arrived"); }
+  function arrive() { stopNav(true); say("You have arrived."); setMsg("You have arrived"); }
+  const TH = [500, 150, 40]; // metres before a turn at which it is announced
+  function announce(st, d, k, soon) {
+    if (st.icon === "arrive" && k >= 3) return; // arrive() says that one
+    let t = k >= 3 ? st.text : st.icon === "arrive" ? "Your destination is " + distWords(d) + " ahead" : "In " + distWords(d) + ", " + lc(st.text);
+    if (soon && k >= 2) t += ", then " + lc(soon.text); // heads-up when the next turn follows closely
+    say(t + ".");
+  }
+  let lastRetry = 0;
   function navTick(ll) {
-    if (!navOn || !M.nav || M.nav.length < 2 || !M.steps) return;
+    if (!navOn || !M.dest) return;
+    if (!M.nav || M.nav.length < 2 || !M.steps) { // route lost (a reroute failed): try again
+      if (!routing && Date.now() - lastRetry > 8000) { lastRetry = Date.now(); routeTo(); }
+      return;
+    }
     const pr = project(ll), left = Math.max(0, navTotal - pr.along);
+    M.navPos = { idx: pr.idx, pt: pr.pt };
+    M.snap = pr.off < 30 ? { ll: pr.pt, hd: pr.hd } : null; // sit on the road, face along it
     M.live = { left: left / 1000, min: M.navInfo.min * left / navTotal };
-    if (pr.off > 70) { if (++offCnt >= 3 && !routing) { offCnt = 0; speak("Rerouting."); setMsg("Rerouting…"); M.nav = null; routeTo(); return; } } else offCnt = 0;
-    while (stepIdx < M.steps.length - 1 && (pr.along >= M.steps[stepIdx].at - 8 || hav(ll, M.steps[stepIdx].loc) < 25)) { stepIdx++; said = -1; }
-    const st = M.steps[stepIdx], d = hav(ll, st.loc);
-    banner(st, d);
-    if (d <= 250 && said < 1 && d > 60) { said = 1; speak("In " + dist(d).replace(" m", " metres").replace(" km", " kilometres") + ", " + lc(st.text)); }
-    else if (d <= 45 && said < 2) { said = 2; speak(st.text); }
+    if (pr.off > 70) {
+      if (++offCnt >= 3 && !routing) { offCnt = 0; say("Rerouting."); setMsg("Rerouting…"); M.nav = null; routeTo(); return; }
+    } else offCnt = 0;
+    while (stepIdx < M.steps.length - 1 && pr.along > M.steps[stepIdx].at + 12) stepIdx++; // the turn is behind you
+    if (stepIdx !== lastStep) { lastStep = stepIdx; said = 0; }
+    const st = M.steps[stepIdx], d = Math.max(0, st.at - pr.along), nx = M.steps[stepIdx + 1];
+    const soon = nx && nx.at - st.at < 400 ? nx : null;
+    banner(st, d, soon);
+    let k = said; while (k < 3 && d <= TH[k]) k++;
+    if (k > said) { said = k; announce(st, d, k, soon); }
     renderDest();
-    if (left < 30 || (stepIdx === M.steps.length - 1 && d < 30)) arrive();
+    if (left < 50) arrive();
   }
-  el("n-v").onclick = () => { voice = !voice; LS.set("navVoice", voice); el("n-v").classList.toggle("off", !voice); if (!voice && canSpeak) speechSynthesis.cancel(); };
-  el("n-v").classList.toggle("off", !voice); if (!canSpeak) el("n-v").hidden = true;
+  el("n-v").onclick = () => {
+    voice = !voice; LS.set("navVoice", voice); el("n-v").classList.toggle("off", !voice);
+    if (voice) say("Voice guidance on."); else stopSay();
+  };
+  el("n-v").classList.toggle("off", !voice); if (!canSay) el("n-v").hidden = true;
+  el("nb-end").onclick = () => stopNav(true);
+  window.onBackKey = () => { // called by the app when Back is pressed during navigation
+    if (!navOn) return false;
+    if (confirm("End navigation?")) stopNav(true);
+    return true;
+  };
 
   function renderDest() {
     const box = el("m-dest"); box.hidden = !M.dest; if (!M.dest) return;
     const i = M.navInfo, L = M.live;
-    const meta = navOn && L ? `${L.left.toFixed(1)} km left · ${fmtT(L.min)} · arrive ${new Date(Date.now() + L.min * 6e4).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` :
+    const arr = L ? new Date(Date.now() + L.min * 6e4).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+    const meta = navOn && L ? `${L.left.toFixed(1)} km left · ${fmtT(L.min)} · arrive ${arr}` :
       i && i.err ? "Could not plan a route. Check your internet." : i ? `${i.km.toFixed(1)} km · about ${fmtT(i.min)} by road` :
       M.needRoute ? "Waiting for GPS to plan the route…" : "Planning route…";
+    if (navOn) { el("nb-a").textContent = L ? fmtT(L.min) : "--"; el("nb-s").textContent = L ? `${L.left.toFixed(1)} km · arrive ${arr}` : "Getting your position…"; }
     const btns = navOn ? '<button class="mini end" id="d-end">End ride</button>' :
       '<button class="go" id="d-go">Start ride</button><button class="mini" id="d-re">Update</button><button class="mini" id="d-x">Clear</button>';
     const isHome = home && Math.abs(home.lat - M.dest.lat) + Math.abs(home.lon - M.dest.lon) < 0.0004;
@@ -502,6 +661,7 @@
     el("m-spd").textContent = R.on && T.sp >= 1 ? Math.round(T.sp) : 0;
     el("m-grid").innerHTML = card("Distance", R.on ? T.km.toFixed(2) : null, "km") + card("Average", avg ? avg.toFixed(1) : null, "km/h") +
       card("Top speed", R.on && T.vmax ? Math.round(T.vmax) : null, "km/h");
+    el("m-loc").classList.toggle("attn", (navOn || R.on) && !M.follow && !M.view);
     if (R.on && M.pos) sched();
   }
 
@@ -522,12 +682,15 @@
       if (v != null && v < 140 && v > T.vmax) T.vmax = v;
     }
     T.sp = v != null && v >= 1 ? v : 0;
-    if (c.heading != null && !isNaN(c.heading) && (c.speed || 0) > 1.5) { // smooth heading, shortest turn
-      const dlt = ((c.heading - M.hd + 540) % 360) - 180; M.hd = (M.hd + dlt * 0.35 + 360) % 360;
-    }
     if (M.needRoute && M.dest) routeTo();
-    if (navOn) navTick(ll);
-    if (GL) sched(); else if (M.follow && !M.view) center(ll[0], ll[1]); else csched();
+    if (navOn) navTick(ll); else M.snap = null;
+    // heading: the GPS heading while moving, else the direction between fixes; on the planned road, the road's direction
+    const pf = T.hist.length > 1 ? T.hist[T.hist.length - 2].ll : null;
+    let hd = c.heading != null && !isNaN(c.heading) && (c.speed || 0) > 1.5 ? c.heading : (pf && hav(pf, ll) >= 8 ? bearing(pf, ll) : null);
+    if (M.snap && T.sp >= 3) hd = M.snap.hd;
+    if (hd != null) M.hd = norm360(M.hd + dAng(M.hd, hd) * 0.5);
+    if (GL) { sched(); if (chaseOn()) camFix(M.snap ? M.snap.ll : ll, T.sp); }
+    else if (M.follow && !M.view) center(ll[0], ll[1]); else csched();
     setMsg(R.on ? "Recording your route · GPS ±" + Math.round(c.accuracy) + " m" : null);
   }
   function onErr(e) { setMsg(e.code === 1 ? "Location is off for this app. Allow it in Settings." : "Searching for GPS…"); }
@@ -564,8 +727,8 @@
       S.rides.forEach((x, i) => { if (i < S.rides.length - 60) delete x.route; }); // keep routes for the latest 60 rides
       LS.set("rides", S.rides);
     }
-    T.sp = 0; setMsg(); stats(); renderList(); sched();
-    if (GL && glReady) GL.easeTo({ pitch: 0, bearing: 0, duration: 700 });
+    T.sp = 0; setMsg(); stats(); renderList(); sched(); chaseReset();
+    if (GL && glReady && !navOn) GL.easeTo({ pitch: 0, bearing: 0, duration: 700 });
   };
   function thin(a, max = 700) {
     const r = q => [+q[0].toFixed(5), +q[1].toFixed(5)];

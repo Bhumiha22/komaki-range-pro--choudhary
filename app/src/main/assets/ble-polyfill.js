@@ -82,8 +82,8 @@
   };
   try { Object.defineProperty(navigator, "bluetooth", { value: bt, configurable: true }); } catch (e) { navigator.bluetooth = bt; }
 
-  // Screen wake lock -> FLAG_KEEP_SCREEN_ON
-  const wl = { request() { B.keepAwake(true); return Promise.resolve({ release() { B.keepAwake(false); return Promise.resolve(); } }); } };
+  // The app keeps the screen on by itself (Settings -> Appearance -> Keep screen on), so the page's own wake lock does nothing.
+  const wl = { request() { return Promise.resolve({ release() { return Promise.resolve(); } }); } };
   try { Object.defineProperty(navigator, "wakeLock", { value: wl, configurable: true }); } catch (e) {}
 
   // <a download href="blob:..."> -> save into Downloads

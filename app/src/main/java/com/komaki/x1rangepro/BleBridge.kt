@@ -8,6 +8,11 @@ import android.bluetooth.le.ScanSettings
 import android.location.LocationManager
 import android.content.ContentValues
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -21,6 +26,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
@@ -67,6 +73,62 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
         StatusWidget.save(act.applicationContext, soc, rangeKm, charging, etaMin)
     }
 
+    // ---- voice guidance: the phone's own text-to-speech, ducking music while it talks ----
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
+    private var pendingSay: String? = null
+    private val navAttrs = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
+    private val focusReq = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+        .setAudioAttributes(navAttrs).build()
+    private val audio: AudioManager? = act.getSystemService(AudioManager::class.java)
+
+    private fun speakNow(text: String) {
+        val e = tts ?: return
+        audio?.requestAudioFocus(focusReq)
+        e.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nav")
+    }
+
+    @JavascriptInterface
+    fun speak(text: String) {
+        act.runOnUiThread {
+            if (tts == null) {
+                pendingSay = text
+                tts = TextToSpeech(act.applicationContext) { status ->
+                    val e = tts
+                    if (status == TextToSpeech.SUCCESS && e != null) {
+                        val r = e.setLanguage(Locale("en", "IN"))
+                        if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) e.setLanguage(Locale.US)
+                        e.setAudioAttributes(navAttrs)
+                        e.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                            override fun onStart(id: String?) {}
+                            override fun onDone(id: String?) { audio?.abandonAudioFocusRequest(focusReq) }
+                            override fun onError(id: String?) { audio?.abandonAudioFocusRequest(focusReq) }
+                        })
+                        ttsReady = true
+                        pendingSay?.let { speakNow(it) }
+                        pendingSay = null
+                    }
+                }
+            } else if (ttsReady) speakNow(text) else pendingSay = text
+        }
+    }
+
+    @JavascriptInterface
+    fun stopSpeak() { act.runOnUiThread { tts?.stop(); audio?.abandonAudioFocusRequest(focusReq) } }
+
+    @JavascriptInterface
+    fun setKeepOn(on: Boolean) { act.runOnUiThread { act.setKeepOn(on) } }
+
+    @JavascriptInterface
+    fun setBackIntercept(on: Boolean) { act.backIntercept = on }
+
+    @JavascriptInterface
+    fun appVersion(): String = try {
+        act.packageManager.getPackageInfo(act.packageName, 0).versionName ?: ""
+    } catch (e: Exception) { "" }
+
     @JavascriptInterface
     fun setLightBars(light: Boolean) { act.runOnUiThread { act.setBarsLight(light) } }
 
@@ -98,6 +160,7 @@ class BleBridge(private val act: MainActivity, private val web: WebView) {
     }
 
     fun shutdown() {
+        try { tts?.shutdown() } catch (e: Exception) {}
         scope.cancel()
         links.values.forEach { it.gatt?.close() }
         links.clear()
