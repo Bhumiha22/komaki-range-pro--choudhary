@@ -249,6 +249,15 @@ button.mini.end{flex:1;color:#ff5a5a;border-color:#ff5a5a66;padding:11px 14px;fo
 .mnav #n-v{background:none;border:0;padding:4px}.mnav #n-v svg{width:26px;height:26px}.mnav #n-v.off{opacity:.45}
 .mapcard.nav .msearch,.mapcard.nav .mres{display:none}
 .mapcard.nav .mctl{bottom:40px}
+.mchips{display:flex;gap:8px;margin:0 4px 10px}
+.hbtn{display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;border:1px solid var(--hair);background:var(--glass);color:var(--tx);font:inherit;font-size:14px;font-weight:500}
+.hbtn[hidden],.mhome[hidden],#h-opts[hidden],#h-rm[hidden]{display:none}
+.hbtn svg{width:18px;height:18px;fill:none;stroke:#8f7dff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.hbtn.sq{padding:10px 12px}.hbtn.sq svg{stroke:var(--mut)}
+.mhome{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
+.homepin{width:30px;height:30px;border-radius:50%;background:#6c5ce7;border:2.5px solid #fff;display:grid;place-items:center;box-shadow:0 4px 12px #0007}
+.homepin svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mapcard.picking #mlmap,.mapcard.picking #gmap{cursor:crosshair}
+.mapcard.picking{outline:2px solid #6c5ce7}
 </style>
 </head>
 <body>
@@ -378,6 +387,10 @@ button.mini.end{flex:1;color:#ff5a5a;border-color:#ff5a5a66;padding:11px 14px;fo
       <button id="m-loc" aria-label="Back to my location"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
     </div>
   </div>
+  <div class="mchips"><button type="button" class="hbtn" id="c-home"><svg viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg><span id="c-home-t">Set home</span></button><button type="button" class="hbtn sq" id="c-edit" hidden aria-label="Change home"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button></div>
+  <div class="card mhome" id="m-home" hidden><b id="h-t">Set your home</b>
+    <div class="dbtn" id="h-opts"><button class="go" id="h-here">Use my location</button><button class="mini" id="h-pick">Pick on map</button></div>
+    <div class="dbtn"><button class="mini" id="h-rm" hidden>Remove home</button><button class="mini" id="h-x">Cancel</button></div></div>
   <div class="mstat" id="m-msg">Waiting for GPS…</div>
   <div class="card mdest" id="m-dest" hidden></div>
   <div class="card trio" id="m-grid"></div>

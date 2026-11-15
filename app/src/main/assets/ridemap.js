@@ -23,6 +23,7 @@
     sat: ESRI
   };
   const CREDIT = { dark: "© OpenStreetMap contributors © CARTO", light: "© OpenStreetMap contributors © CARTO", sat: "Imagery © Esri, Maxar, Earthstar Geographics" };
+  const HOUSE = '<svg viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>';
   const isLight = () => document.body.classList.contains("light");
   const kind = () => M.sat ? "sat" : isLight() ? "light" : "dark";
 
@@ -31,7 +32,8 @@
     hd: 0, sat: !!LS.get("mapSat", false), dest: null, from: null, nav: null, navInfo: null, needRoute: false };
   const T = { watch: null, pts: [], km: 0, vmax: 0, sp: 0, lastT: 0, fixT: 0, hist: [] };
   let navOn = false, navRide = false, stepIdx = 1, said = -1, offCnt = 0, pendingStart = false, navTotal = 0, navCum = [];
-  let GL = null, glReady = false, glEver = false, glTried = false, curKind = "", posEl = null, posMk = null, destEl = null, destMk = null, fromEl = null, fromMk = null, routing = false;
+  let GL = null, glReady = false, glEver = false, glTried = false, curKind = "", posEl = null, posMk = null, destEl = null, destMk = null, fromEl = null, fromMk = null, homeEl = null, homeMk = null, routing = false;
+  let home = LS.get("home", null), pickHome = false;
   const accent = () => getComputedStyle(document.body).getPropertyValue("--ac").trim() || "#3aa0ff";
   const visible = () => el("s-gps").classList.contains("a");
   const NAVC = "#ffb02e";
@@ -99,6 +101,11 @@
       const x = px(M.dest.lon, z) - ox, y = py(M.dest.lat, z) - oy;
       ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fillStyle = "#ff5a5a"; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#fff"; ctx.stroke();
     }
+    if (home) {
+      const x = px(home.lon, z) - ox, y = py(home.lat, z) - oy;
+      ctx.beginPath(); ctx.arc(x, y, 11, 0, 7); ctx.fillStyle = "#6c5ce7"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = "#fff"; ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center"; ctx.fillText("H", x, y + 4); ctx.textAlign = "left";
+    }
     if (M.from) {
       const x = px(M.from.lon, z) - ox, y = py(M.from.lat, z) - oy;
       ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fillStyle = "#2fe06b"; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#fff"; ctx.stroke();
@@ -123,12 +130,14 @@
       GL.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
     } catch (e) { GL = null; return; }
     el("mapcard").classList.add("gl");
-    GL.on("style.load", () => { glReady = true; glEver = true; glLayers(); glSync(); });
+    GL.on("style.load", onStyle);
+    GL.on("click", e => { if (pickHome) saveHome(e.lngLat.lat, e.lngLat.lng); });
     GL.on("error", () => { if (!glEver) glFallback(); });
     GL.on("dragstart", () => { M.follow = false; });
     GL.on("zoom", () => { M.z = GL.getZoom(); });
     setTimeout(() => { if (!glEver) glFallback(); }, 12000);
   }
+  function onStyle() { if (!GL) return; glReady = true; glEver = true; glLayers(); glSync(); }
   function glFallback() {
     if (!GL) return;
     try { GL.remove(); } catch (e) {}
@@ -136,6 +145,7 @@
   }
   function glLayers() {
     const c = accent(), rnd = { "line-cap": "round", "line-join": "round" };
+    if (GL.getSource("route")) return; // layers already there
     try {
       GL.addSource("nav", { type: "geojson", data: emptyFC() });
       GL.addLayer({ id: "nav-case", type: "line", source: "nav", layout: rnd, paint: { "line-color": "#000000", "line-opacity": 0.35, "line-width": 9 } });
@@ -151,6 +161,7 @@
       posEl = document.createElement("div"); posEl.className = "posdot"; posMk = new maplibregl.Marker({ element: posEl });
       destEl = document.createElement("div"); destEl.className = "destpin"; destMk = new maplibregl.Marker({ element: destEl });
       fromEl = document.createElement("div"); fromEl.className = "frompin"; fromMk = new maplibregl.Marker({ element: fromEl });
+      homeEl = document.createElement("div"); homeEl.className = "homepin"; homeEl.innerHTML = HOUSE; homeMk = new maplibregl.Marker({ element: homeEl });
     }
   }
   function glSync() {
@@ -167,6 +178,8 @@
     else if (posEl.isConnected) posMk.remove();
     if (M.dest) { destMk.setLngLat([M.dest.lon, M.dest.lat]); if (!destEl.isConnected) destMk.addTo(GL); }
     else if (destEl.isConnected) destMk.remove();
+    if (home) { homeMk.setLngLat([home.lon, home.lat]); if (!homeEl.isConnected) homeMk.addTo(GL); }
+    else if (homeEl.isConnected) homeMk.remove();
     if (M.from) { fromMk.setLngLat([M.from.lon, M.from.lat]); if (!fromEl.isConnected) fromMk.addTo(GL); }
     else if (fromEl.isConnected) fromMk.remove();
     if (M.follow && !M.view && M.pos) {
@@ -178,7 +191,11 @@
   // map look follows the app theme and the satellite switch
   function applyKind() {
     const k = kind();
-    if (GL && glEver) { if (k !== curKind) { curKind = k; glReady = false; GL.setStyle(STY[k]); } }
+    if (GL && glEver) { if (k !== curKind) {
+        curKind = k; glReady = false;
+        GL.setStyle(STY[k], { diff: false }); // full reload so the route layers are added again on the new style
+        setTimeout(() => { if (GL && !glReady && GL.isStyleLoaded()) onStyle(); }, 2500); // safety net if style.load was missed
+      } }
     else csched();
   }
   window.addEventListener("themechange", applyKind);
@@ -227,6 +244,11 @@
       return;
     }
     ptr.set(e.pointerId, e);
+  });
+  cv.addEventListener("click", e => {
+    if (!pickHome || GL) return;
+    const r = cv.getBoundingClientRect(), z = Math.round(M.z);
+    saveHome(latOf(py(M.lat, z) - r.height / 2 + (e.clientY - r.top), z), lonOf(px(M.lon, z) - r.width / 2 + (e.clientX - r.left), z));
   });
   const up = e => { ptr.delete(e.pointerId); pinch0 = 0; };
   cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
@@ -294,6 +316,32 @@
     M.nav = null; M.navInfo = null; M.follow = false; M.view = null; renderDest();
     if (M.dest) routeTo(); else sched();
   }
+  function useDest(d) {
+    stopNav(false); M.dest = d; q.value = d.name; xb.hidden = false; res.hidden = true; M.nav = null; M.navInfo = null; M.steps = null;
+    M.follow = false; M.view = null; routing = false; renderDest(); routeTo();
+  }
+
+  /* ----- Home shortcut ----- */
+  const homeBtn = el("c-home"), editBtn = el("c-edit"), homeBox = el("m-home");
+  function homeUI() { el("c-home-t").textContent = home ? "Home" : "Set home"; editBtn.hidden = !home; }
+  function saveHome(lat, lon) {
+    home = { name: "Home", lat, lon }; LS.set("home", home); pickHome = false; el("mapcard").classList.remove("picking");
+    homeBox.hidden = true; homeUI(); renderDest(); sched(); setMsg("Home saved");
+  }
+  function openHome() {
+    pickHome = false; el("mapcard").classList.remove("picking");
+    el("h-t").textContent = home ? "Change your home" : "Set your home"; el("h-opts").hidden = false; el("h-rm").hidden = !home; homeBox.hidden = false;
+  }
+  homeBtn.onclick = () => {
+    if (!home) { openHome(); return; }
+    M.from = null; qf.value = ""; useDest({ name: "Home", lat: home.lat, lon: home.lon });
+  };
+  editBtn.onclick = openHome;
+  el("h-here").onclick = () => { if (M.pos) saveHome(M.pos[0], M.pos[1]); else { el("h-t").textContent = "Waiting for GPS… try again in a moment"; oneShot(); } };
+  el("h-pick").onclick = () => { pickHome = true; el("mapcard").classList.add("picking"); el("h-t").textContent = "Tap the map where your home is. Zoom in first for accuracy."; el("h-opts").hidden = true; };
+  el("h-rm").onclick = () => { home = null; LS.set("home", null); homeBox.hidden = true; homeUI(); renderDest(); sched(); };
+  el("h-x").onclick = () => { pickHome = false; el("mapcard").classList.remove("picking"); homeBox.hidden = true; };
+  homeUI();
   function bind(inp, which) {
     inp.addEventListener("focus", () => { active = which; if (!inp.value.trim()) { found = recents(); showResults(); } });
     inp.addEventListener("input", () => {
@@ -431,10 +479,12 @@
       M.needRoute ? "Waiting for GPS to plan the route…" : "Planning route…";
     const btns = navOn ? '<button class="mini end" id="d-end">End ride</button>' :
       '<button class="go" id="d-go">Start ride</button><button class="mini" id="d-re">Update</button><button class="mini" id="d-x">Clear</button>';
-    box.innerHTML = `<div class="dd"><b>${esc((M.from ? M.from.name : "My location") + " → " + M.dest.name)}</b><span class="meta">${esc(meta)}</span></div><div class="dbtn">${btns}</div>`;
+    const isHome = home && Math.abs(home.lat - M.dest.lat) + Math.abs(home.lon - M.dest.lon) < 0.0004;
+    box.innerHTML = `<div class="dd"><b>${esc((M.from ? M.from.name : "My location") + " → " + M.dest.name)}</b><span class="meta">${esc(meta)}</span></div><div class="dbtn">${btns}</div>${navOn || isHome ? "" : '<div class="dbtn"><button class="mini" id="d-home">Save as Home</button></div>'}`;
     const b = id => el(id);
     if (navOn) b("d-end").onclick = () => stopNav(true);
     else {
+      if (el("d-home")) el("d-home").onclick = () => saveHome(M.dest.lat, M.dest.lon);
       b("d-go").onclick = startNav;
       b("d-re").onclick = () => { M.nav = null; M.navInfo = null; routing = false; renderDest(); routeTo(); };
       b("d-x").onclick = () => { q.value = ""; qf.value = ""; M.from = null; xb.hidden = true; clearDest(); };
