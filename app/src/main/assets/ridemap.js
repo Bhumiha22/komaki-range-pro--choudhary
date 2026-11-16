@@ -34,7 +34,7 @@
   let navOn = false, navRide = false, stepIdx = 1, said = 0, lastStep = -1, offCnt = 0, pendingStart = false, navTotal = 0, navCum = [];
   // follow camera (Google-style: heading up, tilted, the arrow sits in the lower part of the screen)
   const CAM = { on: false, raf: 0, lt: 0, from: null, to: null, cur: null, t0: 0, dur: 1000, b0: 0, b1: 0, bear: 0, pitch: 0, z: 17, zT: 17, zoff: 0, lastFix: 0 };
-  const PITCH = 55;
+  const PITCH = 0; // flat, so the dot is exactly where you are
   let GL = null, glReady = false, glEver = false, glTried = false, curKind = "", posEl = null, posMk = null, destEl = null, destMk = null, fromEl = null, fromMk = null, homeEl = null, homeMk = null, routing = false;
   let home = LS.get("home", null), pickHome = false, resumeT = 0, posArrow = false;
   const accent = () => getComputedStyle(document.body).getPropertyValue("--ac").trim() || "#3aa0ff";
@@ -229,7 +229,7 @@
   const baseZ = v => v > 45 ? 16.1 : v > 25 ? 16.7 : 17.3;       // zoom out a little when you go faster
   const clampZ = z => Math.max(12, Math.min(19, z));
   const chaseOn = () => !!(GL && glReady && M.follow && !M.view && (navOn || R.on));
-  const camPad = () => ({ top: Math.round((el("mlmap").clientHeight || 600) * 0.44), bottom: 0, left: 0, right: 0 }); // arrow sits low on screen
+  const camPad = () => ({ top: Math.round((el("mlmap").clientHeight || 600) * 0.18), bottom: 0, left: 0, right: 0 }); // arrow sits low on screen
   function chaseReset() { CAM.on = false; CAM.lastFix = 0; if (CAM.raf) { cancelAnimationFrame(CAM.raf); CAM.raf = 0; } }
   function camFix(ll, spd) {       // a new GPS fix: glide the camera and arrow there over about a second
     if (!chaseOn() || !visible()) return;
@@ -559,10 +559,10 @@
     navOn = true; offCnt = 0; M.follow = true; M.view = null; stepIdx = Math.min(1, M.steps.length - 1); said = 0; lastStep = -1;
     CAM.zoff = 0; chaseReset();
     if (document.activeElement) document.activeElement.blur();
-    document.body.classList.add("navfull"); el("mapcard").classList.add("nav"); el("m-nav").hidden = false; el("n-bar").hidden = false; res.hidden = true;
+    el("mapcard").classList.add("nav"); el("m-nav").hidden = false; el("n-bar").hidden = false; res.hidden = true;
     try { if (AB && AB.setBackIntercept) AB.setBackIntercept(true); } catch (e) {}
     navRide = false; if (!R.on) { window.rideStart(false); navRide = true; }
-    window.scrollTo(0, 0); afterLayout();
+    try { el("mapcard").scrollIntoView({ block: "start" }); } catch (e) {} afterLayout();
     let first = "Starting navigation. " + M.steps[stepIdx].text + ".";
     if (M.pos) {
       const p0 = project(M.pos); if (p0.off < 60) M.hd = p0.hd;
@@ -576,7 +576,7 @@
   }
   function stopNav(endRide) {
     const was = navOn; navOn = false; offCnt = 0; pendingStart = false; M.live = null; M.navPos = null; M.snap = null; clearTimeout(resumeT);
-    document.body.classList.remove("navfull"); el("mapcard").classList.remove("nav"); el("m-nav").hidden = true; el("n-bar").hidden = true;
+    el("mapcard").classList.remove("nav"); el("m-nav").hidden = true; el("n-bar").hidden = true;
     try { if (AB && AB.setBackIntercept) AB.setBackIntercept(false); } catch (e) {}
     stopSay();
     if (endRide && navRide && R.on) window.rideStop();
@@ -668,7 +668,8 @@
   /* ---------- GPS ---------- */
   function onPos(p) {
     const c = p.coords, ll = [c.latitude, c.longitude];
-    if (c.accuracy > 50) { setMsg("GPS weak: ±" + Math.round(c.accuracy) + " m"); return; }
+    if (c.accuracy > 150) { setMsg("GPS weak: ±" + Math.round(c.accuracy) + " m"); return; }
+    if (c.accuracy > 50 && (R.on || navOn)) { setMsg("GPS weak: ±" + Math.round(c.accuracy) + " m"); return; } // not good enough to record or navigate
     M.pos = ll; LS.set("lastPos", ll); T.fixT = Date.now();
     let v = c.speed != null && !isNaN(c.speed) ? c.speed * 3.6 : null;
     T.hist.push({ t: T.fixT, ll }); while (T.hist.length && T.fixT - T.hist[0].t > 45000) T.hist.shift();

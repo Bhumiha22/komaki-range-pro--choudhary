@@ -270,7 +270,7 @@ body.navfull .mapcard .mnav{top:calc(var(--sat,0px) + 10px);left:calc(var(--sal,
 body.navfull .mapcard .mspd{bottom:calc(var(--sab,0px) + 104px)}
 body.navfull .mapcard .mctl{bottom:calc(var(--sab,0px) + 104px);right:calc(var(--sar,0px) + 12px)}
 .mnav .nt small{display:block;font-size:12.5px;opacity:.85;margin-top:2px}.mnav .nt small:empty{display:none}
-.nbar{position:absolute;z-index:6;left:0;right:0;bottom:0;display:flex;align-items:center;gap:12px;padding:14px 18px calc(var(--sab,0px) + 14px);background:var(--glass);backdrop-filter:blur(16px);border-top:1px solid var(--hair);border-radius:22px 22px 0 0}
+.nbar{position:relative;z-index:6;display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--glass);backdrop-filter:blur(16px);border-top:1px solid var(--hair)}
 .nbar[hidden]{display:none}
 .nbar .nbi{flex:1;min-width:0}.nbar .nbi b{display:block;font-size:26px;font-weight:600;line-height:1.1;letter-spacing:-.01em;color:var(--tx)}.nbar .nbi span{font-size:13.5px;color:var(--mut)}
 .nbar button{padding:12px 24px;border-radius:16px;border:0;background:#ff5a5a;color:#fff;font:inherit;font-weight:600;font-size:15px}
@@ -280,6 +280,8 @@ body.navfull .mapcard .mctl{bottom:calc(var(--sab,0px) + 104px);right:calc(var(-
 /* the re-centre button lights up when you have moved the map away from yourself */
 .mctl #m-loc.attn{background:var(--ac);color:#fff;border-color:var(--ac)}
 body.navfull .maplibregl-ctrl-bottom-left{margin-bottom:calc(var(--sab,0px) + 92px)}
+.mapcard.nav .mspd,.mapcard.nav .mctl{bottom:calc(var(--navh,92px) + 12px)}
+.mapcard.nav .maplibregl-ctrl-bottom-left{margin-bottom:var(--navh,92px)}
 </style>
 </head>
 <body>
